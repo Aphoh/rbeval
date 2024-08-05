@@ -16,14 +16,16 @@ def run_lm_eval(
     num_fewshot: int,
     output_path: str,
 ):
-    lm_eval_path = lm_eval_path or "lm_eval"
-    cmd = [lm_eval_path]
+    if lm_eval_path is None:
+        cmd = ["python3", "-m", "lm_eval"]
+    else:
+        cmd = [lm_eval_path]
+    cmd += ["--model", "vllm"]
     cmd += ["--model_args", model_args]
     cmd += ["--tasks", tasks]
-    cmd += ["--num_fewshot", num_fewshot]
+    cmd += ["--num_fewshot", str(num_fewshot)]
     cmd += ["--output_path", output_path]
     cmd += ["--log_samples"]
-    cmd += ["--cache_requests", "true"]
     cmd += ["--cache_requests", "true"]
     print(f"Running: {' '.join(cmd)}")
     subprocess.check_call(cmd, env=os.environ)
@@ -34,7 +36,7 @@ def main():
 
     parser.add_argument("output", type=str, help="output directory")
     parser.add_argument("model", type=str, help="model path")
-    parser.add_argument("group", type=str, default=None)
+    parser.add_argument("group", type=str)
 
     parser.add_argument("--lm_eval_path", type=str)
     parser.add_argument("--req_cache_path", type=str, default="/tmp/lm_eval_cache")
@@ -46,7 +48,7 @@ def main():
     args = parser.parse_args()
     model: str = args.model
     output_path: Path = Path(args.output)
-    group: Optional[str] = args.group
+    group: str = args.group
     reformat: Optional[str] = args.reformat
     lm_eval_path: Optional[str] = args.lm_eval_path
     req_cache_path = Path(args.req_cache_path)

@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import Dict, List
+from collections import defaultdict
 
 import numpy as np
 
@@ -19,12 +20,12 @@ class Eval:
 class ModelEval:
     """The evaluations for a given model"""
 
-    model_spec: EvalSpec
+    eval_spec: EvalSpec
     evals: List[Eval] = field(default_factory=list)
 
     @property
     def model_name(self) -> str:
-        return self.model_spec.model_name
+        return self.eval_spec.model_name
 
 
 @dataclass
@@ -33,3 +34,18 @@ class EvalGroup:
 
     group: str
     model_evals: List[ModelEval] = field(default_factory=list)
+
+    def model_names(self) -> List[str]:
+        return [m.model_name for m in self.model_evals]
+
+    def min_fewshots(self) -> Dict[str, int]:
+        res: Dict[str, int] = defaultdict(lambda: 999)
+        for me in self.model_evals:
+            res[me.model_name] = min(res[me.model_name], me.eval_spec.fewshot)
+        return res
+
+    def max_fewshots(self) -> Dict[str, int]:
+        res: Dict[str, int] = defaultdict(lambda: -999)
+        for me in self.model_evals:
+            res[me.model_name] = max(res[me.model_name], me.eval_spec.fewshot)
+        return res
