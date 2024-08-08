@@ -19,6 +19,8 @@ def fig_axs_grid(
         sharey=sharey,
         sharex=sharex,
     )
+    if isinstance(axs, Axes):
+        axs = np.array([[axs]])
     if len(axs.shape) == 1:
         axs = axs[np.newaxis].T
     return fig, axs
@@ -56,23 +58,25 @@ class CdfData:
         return cls.from_weights(weights, scores)
 
     @classmethod
-    def from_weights(cls, weights: np.ndarray, scores: np.ndarray) -> "CdfData":
+    def from_weights(
+        cls, weights: np.ndarray, scores: np.ndarray, max_p=1000
+    ) -> "CdfData":
         sort_perm = scores.argsort()
-        sort_weights = weights[sort_perm]
-        sort_scores = scores[sort_perm]
+        base_weights = weights[sort_perm]
+        base_scores = scores[sort_perm]
+        base_cdf_p = 1 - np.cumsum(base_weights)
+        minscore, maxscore = base_scores[0], base_scores[-1]
+        if len(base_scores) > max_p:
+            scores = np.linspace(minscore, maxscore, max_p)
+            cdf_p = np.interp(scores, base_scores, base_cdf_p)
+        else:
+            scores, cdf_p = base_scores, base_cdf_p
         return CdfData(
-            cdf_p=1 - np.cumsum(sort_weights),
-            scores=sort_scores,
+            cdf_p=cdf_p,
+            scores=scores,
         )
 
-    def plot(self, ax: Axes, color=None, label: Optional[str] = None, max_pts=800000):
-        minscore, maxscore = self.scores.min(), self.scores.max()
-        if len(self.cdf_p) > max_pts:
-            x = np.linspace(minscore, maxscore, max_pts)
-            y = np.interp(x, self.scores, self.cdf_p)
-        else:
-            x, y = self.scores, self.cdf_p
-
-        ax.plot(x, y, label=label, color=color, alpha=0.40)
-        ax.set_xlim(x.min(), x.max())
+    def plot(self, ax: Axes, color=None, label: Optional[str] = None):
+        ax.plot(self.scores, self.cdf_p, label=label, color=color, alpha=0.40)
+        ax.set_xlim(self.scores.min(), self.scores.max())
         ax.set_ylim(0, 1)

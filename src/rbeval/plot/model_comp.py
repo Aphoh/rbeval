@@ -1,9 +1,10 @@
 import argparse
+import altair as alt
+import pandas as pd
 from collections import defaultdict
 from dataclasses import dataclass, field
 import itertools
 from pathlib import Path
-from matplotlib import colormaps
 from typing import Dict, List, Optional
 import warnings
 
@@ -11,7 +12,7 @@ import numpy as np
 
 from rbeval.eval_spec import EvalSpec
 from rbeval.plot.data import EvalGroup, ModelEval
-from rbeval.plot.utils import CdfData, fig_axs_grid, renormed
+from rbeval.plot.utils import CdfData, renormed
 
 
 @dataclass
@@ -69,7 +70,7 @@ def model_comparer(samples: List[EvalGroup], figure_dir: Path, rem_args: List[st
 
     fewshots = set(bases_fs.keys()).intersection(compares_fs.keys())
     grouped: Dict[str, List[Scores]] = defaultdict(list)
-    for i, fewshot in enumerate(sorted(fewshots)):
+    for fewshot in sorted(fewshots):
         base_eval = bases_fs[fewshot][0]
         compare_eval = compares_fs[fewshot][0]
         base_by_category = {e.task_name(): e for e in base_eval.evals}
@@ -115,55 +116,94 @@ def model_comparer(samples: List[EvalGroup], figure_dir: Path, rem_args: List[st
 
 
 def plot_diff_cdf(grouped: Dict[str, List[Scores]], figure_path: Path):
-    fig, axs = fig_axs_grid(2, len(grouped))
-    for i, title in enumerate(sorted(grouped.keys())):
-        score_list = grouped[title]
-        fewshots = set(s.spec.fewshot for s in score_list)
-        min_fs, max_fs = min(fewshots), max(fewshots)
+    charts = []
+    for title, score_list in grouped.items():
+        diff_cdf_data = []
+        corr_cdf_data = []
         for score in score_list:
-            label = None
-            if score.spec.fewshot == max_fs:
-                label = f"{score.spec.model_name} fs{min_fs}-{max_fs}"
-            color = colormaps["Oranges"](
-                (score.spec.fewshot + 1 - min_fs) / (max_fs + 1 - min_fs)
+            diff_cdf = CdfData.from_samples(score.cor_minus_inc_samples)
+            diff_cdf_data.append(
+                pd.DataFrame(
+                    {
+                        "p": diff_cdf.scores,
+                        "1-CDF(p)": diff_cdf.cdf_p,
+                        "fewshot": score.spec.fewshot,
+                        "model": score.spec.model_name,
+                    }
+                )
+            )
+            corr_cdf = CdfData.from_samples(score.cor_samples)
+            corr_cdf_data.append(
+                pd.DataFrame(
+                    {
+                        "p": corr_cdf.scores,
+                        "1-CDF(p)": corr_cdf.cdf_p,
+                        "fewshot": score.spec.fewshot,
+                        "model": score.spec.model_name,
+                    }
+                )
             )
 
-            diff_cdf = CdfData.from_samples(score.cor_minus_inc_samples)
-            diff_cdf.plot(axs[0, i], label=label, color=color)
-
-            corr_cdf = CdfData.from_samples(score.cor_samples)
-            corr_cdf.plot(axs[1, i], label=label, color=color)
-
-        axs[0, i].set_title(f"{title}, tuned - base")
-        axs[0, i].set_xlabel(
-            "p=tuned_cor - max(tuned_inc) - (base_cor - max(base_inc))"
+        diff_cdf_df = pd.concat(diff_cdf_data)
+        corr_cdf_df = pd.concat(corr_cdf_data)
+        diff_cdf_chart = (
+            alt.Chart(diff_cdf_df)
+            .mark_line()
+            .encode(
+                x=alt.X("p:Q"),
+                y=alt.Y("1-CDF(p):Q"),
+                opacity=alt.Opacity("fewshot:Q"),
+                color=alt.Color("model:N"),
+            )
+            .properties(title=f"{title}, tuned - base", width=300, height=200)
         )
-        axs[0, i].legend()
+        corr_cdf_chart = (
+            alt.Chart(corr_cdf_df)
+            .mark_line()
+            .encode(
+                x=alt.X("p:Q"),
+                y=alt.Y("1-CDF(p):Q"),
+                opacity=alt.Opacity("fewshot:Q"),
+                color=alt.Color("model:N"),
+            )
+            .properties(title=f"{title}, tuned cor - max(inc)", width=300, height=200)
+        )
 
-        axs[1, i].set_title(f"{title} tuned cor - max(inc)")
-        axs[1, i].set_xlabel("p=tuned_cor - max(tuned_inc)")
-        axs[1, i].legend()
+        chart = alt.vconcat(diff_cdf_chart, corr_cdf_chart)
+        charts.append(chart)
 
-    axs[0, 0].set_ylabel("1-CDF(p)")
-    axs[1, 0].set_ylabel("1-CDF(p)")
-
-    fig.tight_layout()
-    fig.savefig(str(figure_path))
+    final_chart = alt.hconcat(*charts)
+    final_chart.save(str(figure_path))
 
 
 def plot_by_group(grouped: Dict[str, List[Scores]], figure_path: Path):
-    fig, ax = fig_axs_grid(1, 4, sharey=False)
-    for i, (title, scores) in enumerate(grouped.items()):
+    charts = []
+
+    for title, scores in grouped.items():
+        data = []
         for s in scores:
             cnt = sum(len(a) for a in s.cor_minus_inc_samples)
             fs = s.spec.fewshot
-            ax[i, 0].bar(fs, cnt, label=f"fs{fs}")
-            ax[i, 0].set_title(f"{title} counts")
-            ax[i, 0].set_xlabel("Fewshot")
-    ax[0, 0].set_ylabel("Number of samples")
+            data.append({"Fewshot": fs, "Count": cnt, "Model": s.spec.model_name})
 
-    fig.tight_layout()
-    fig.savefig(str(figure_path))
+        df = pd.DataFrame(data)
+        chart = (
+            alt.Chart(df)
+            .mark_bar()
+            .encode(
+                x=alt.X("Fewshot:O", title="Fewshot"),
+                y=alt.Y("Count:Q", title="Number of Samples"),
+                color="Model:N",
+                tooltip=["Fewshot", "Count"],
+            )
+            .properties(title=f"{title} counts")
+        )
+        charts.append(chart)
+
+    final_chart = (
+        alt.hconcat(*charts).resolve_axis(y="shared").resolve_scale(y="shared")
+    )
+    final_chart.save(str(figure_path))
 
 
 def plot_by_fewshot(grouped: Dict[str, List[Scores]], figure_path: Path):
@@ -172,17 +212,38 @@ def plot_by_fewshot(grouped: Dict[str, List[Scores]], figure_path: Path):
         for s in score_list:
             fewshot_grouped[s.spec.fewshot].append((title, s))
 
-    fewshots = sorted(fewshot_grouped.keys())
-    fig, ax = fig_axs_grid(1, len(fewshots))
-    for i, (fs, title_score_pairs) in enumerate(fewshot_grouped.items()):
+    charts = []
+    for fs, title_score_pairs in sorted(fewshot_grouped.items()):
+        data = []
         for title, scores in title_score_pairs:
             cnt = sum(len(a) for a in scores.cor_minus_inc_samples)
-            ax[i, 0].bar(title, cnt, label=f"fs{fs}")
-            ax[i, 0].set_xlabel("Categories")
-    ax[0, 0].set_ylabel("Number of samples")
+            data.append(
+                {
+                    "Title": title,
+                    "Count": cnt,
+                    "Fewshot": fs,
+                    "Model": scores.spec.model_name,
+                }
+            )
 
-    fig.tight_layout()
-    fig.savefig(str(figure_path))
+        df = pd.DataFrame(data)
+        chart = (
+            alt.Chart(df)
+            .mark_bar()
+            .encode(
+                x=alt.X("Title:O", title="Categories"),
+                y=alt.Y("Count:Q", title="Number of Samples"),
+                tooltip=["Title", "Count", "Fewshot"],
+                color="Model:N",
+            )
+            .properties(title=f"Fewshot {fs}")
+        )
+        charts.append(chart)
+
+    final_chart = (
+        alt.hconcat(*charts).resolve_scale(y="shared").resolve_axis(y="shared")
+    )
+    final_chart.save(str(figure_path), scale_factor=2.0)
 
 
 def by_fewshot(model_evals: List[ModelEval]):

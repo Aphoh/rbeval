@@ -8,11 +8,10 @@ import re
 from rbeval.eval_spec import EvalSpec
 from rbeval.plot.data import Eval, EvalGroup, ModelEval
 from rbeval.plot.model_comp import model_comparer
+from rbeval.plot.score_cdf_altair import score_cdf
 from tqdm import tqdm
-# from rbeval.plot.score_cdf import score_cdf
 
-# plot_fns = [score_cdf, model_comparer]
-plot_fns = [model_comparer]
+plot_fns = [score_cdf, model_comparer]
 
 
 def get_samples(inp: Path, name_filter: Optional[str]) -> List[EvalGroup]:
