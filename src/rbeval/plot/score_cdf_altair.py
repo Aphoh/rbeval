@@ -1,7 +1,6 @@
-from pathlib import Path
 from typing import List
 
-from rbeval.plot.data import Eval, EvalGroup
+from rbeval.plot.data import Eval, EvalGroup, Figure
 from abc import ABC, abstractmethod
 import numpy as np
 import altair as alt
@@ -10,18 +9,23 @@ import pandas as pd
 from rbeval.plot.utils import CdfData, renormed
 
 
-def score_cdf(samples: List[EvalGroup], figure_dir: Path, args: List[str]):
-    plot_with_config(CorrectProbCdfPlot(), samples, figure_dir / "corr_score_cdf.html")
-    plot_with_config(
-        CorrIncorrDiffConfig(), samples, figure_dir / "cor_incor_gap_cdf.html"
-    )
+def score_cdf(samples: List[EvalGroup], args: List[str]) -> List[Figure]:
+    return [
+        Figure(
+            name="Correct Prob Perf Curve",
+            chart=plot_with_config(CorrectProbCdfPlot(), samples),
+        ),
+        Figure(
+            name="Corr-Incorr Gap Perf Curve",
+            chart=plot_with_config(CorrIncorrDiffConfig(), samples),
+        ),
+    ]
 
 
 def plot_with_config(
     cfg: "CdfPlotConfig",
     samples: List[EvalGroup],
-    figure_out_path: Path,
-):
+) -> alt.ConcatChart:
     group_dfs = []
     for renorm in [True, False]:
         for group in samples:
@@ -64,7 +68,7 @@ def plot_with_config(
     final_chart = (
         alt.concat(*charts, columns=len(samples)).add_params(selection).interactive()
     )
-    final_chart.save(str(figure_out_path))
+    return final_chart
 
 
 class CdfPlotConfig(ABC):

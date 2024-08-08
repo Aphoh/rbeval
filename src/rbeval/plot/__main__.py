@@ -1,67 +1,15 @@
 import argparse
 from pathlib import Path
-import json
-from typing import Dict, List, Optional
-import numpy as np
-from dataclasses import asdict
-import re
-from rbeval.eval_spec import EvalSpec
-from rbeval.plot.data import Eval, EvalGroup, ModelEval
+from typing import Callable, List, Optional
+from rbeval.plot.data import EvalGroup, Figure, get_samples
 from rbeval.plot.model_comp import model_comparer
-from rbeval.plot.score_cdf_altair import score_cdf
 from tqdm import tqdm
+from rbeval.plot.score_cdf_altair import score_cdf
 
-plot_fns = [score_cdf, model_comparer]
-
-
-def get_samples(inp: Path, name_filter: Optional[str]) -> List[EvalGroup]:
-    groups: Dict[str, EvalGroup] = {}
-
-    for spec_file in (pbar := tqdm(list(inp.glob("*.json")), desc="Reading specs")):
-        pbar.set_description(f"Reading spec {spec_file.stem}")
-        with open(spec_file) as f:
-            spec = EvalSpec(**json.load(f))
-
-        if name_filter:
-            if re.match(name_filter, spec.model_name) is None:
-                print(f"Skipping spec {spec_file.stem}")
-                continue
-
-        group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
-        model_eval = ModelEval(eval_spec=spec)
-        group.model_evals.append(model_eval)
-        for samples_file in (spec_file.parent / spec_file.stem).glob(
-            "**/samples_*.json*"
-        ):
-            cache_file = samples_file.with_suffix(".npy")
-            if samples_file.with_suffix(".npy").exists():
-                model_eval.evals.append(
-                    Eval(**np.load(str(cache_file), allow_pickle=True).item())
-                )
-            else:
-                with open(samples_file, "r") as f:
-                    if samples_file.suffix == ".jsonl":
-                        docs = [json.loads(s) for s in f.readlines()]
-                    else:
-                        assert samples_file.suffix == ".json"
-                        docs = json.load(f)
-
-                cor_logprobs = []
-                inc_logprobs = []
-                for doc in docs:
-                    target = doc["target"]
-                    probs = [float(a[0][0]) for a in doc["resps"]]
-                    cor_logprobs.append(probs.pop(target))
-                    inc_logprobs.append(probs)
-                eval = Eval(
-                    name=samples_file.stem,
-                    cor_logprobs=np.array(cor_logprobs),
-                    inc_logprobs=np.array(inc_logprobs),
-                )
-                np.save(str(cache_file), asdict(eval))  # type: ignore
-                model_eval.evals.append(eval)
-
-    return list(groups.values())
+plot_fns: List[Callable[[List[EvalGroup], List[str]], List[Figure]]] = [
+    score_cdf,
+    model_comparer,
+]
 
 
 def main():
@@ -76,8 +24,11 @@ def main():
     figure_dir = Path(args.figure_dir)
     samples = get_samples(eval_dir, name_filter)
 
-    for fn in plot_fns:
-        fn(samples, figure_dir, rest)
+    figures = [fig for fig_fn in plot_fns for fig in fig_fn(samples, rest)]
+    for figure in (pbar := tqdm(figures, desc="Saving figures")):
+        path = (figure_dir / figure.name.replace(".", "_")).with_suffix(".png")
+        pbar.set_description(f"Saving {path.stem}")
+        figure.chart.save(str(path), scale_factor=2.0)
 
 
 if __name__ == "__main__":

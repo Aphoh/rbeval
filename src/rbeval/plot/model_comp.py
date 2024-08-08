@@ -4,14 +4,13 @@ import pandas as pd
 from collections import defaultdict
 from dataclasses import dataclass, field
 import itertools
-from pathlib import Path
 from typing import Dict, List, Optional
 import warnings
 
 import numpy as np
 
 from rbeval.eval_spec import EvalSpec
-from rbeval.plot.data import EvalGroup, ModelEval
+from rbeval.plot.data import EvalGroup, Figure, ModelEval
 from rbeval.plot.utils import CdfData, renormed
 
 
@@ -22,7 +21,7 @@ class Scores:
     cor_samples: List[np.ndarray] = field(default_factory=list)
 
 
-def model_comparer(samples: List[EvalGroup], figure_dir: Path, rem_args: List[str]):
+def model_comparer(samples: List[EvalGroup], rem_args: List[str]) -> List[Figure]:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", type=str)
     parser.add_argument("--compare", type=str)
@@ -34,7 +33,7 @@ def model_comparer(samples: List[EvalGroup], figure_dir: Path, rem_args: List[st
         warnings.warn(
             "Skipping model comparison plot, need to specify base and compare"
         )
-        return
+        return []
 
     bases: List[ModelEval] = list(
         itertools.chain.from_iterable(
@@ -108,14 +107,15 @@ def model_comparer(samples: List[EvalGroup], figure_dir: Path, rem_args: List[st
         for title, scores in scores_by_mask.items():
             grouped[title].append(scores)
 
-    plot_diff_cdf(grouped, figure_dir / f"{base_name}_to_{comp_name}_diff_cdf.png")
-    plot_by_group(grouped, figure_dir / f"{base_name}_to_{comp_name}_cnt_by_group.png")
-    plot_by_fewshot(
-        grouped, figure_dir / f"{base_name}_to_{comp_name}_cnt_by_fewshot.png"
-    )
+    cmp_name = f"{base_name} to {comp_name}"
+    return [
+        Figure(name=f"{cmp_name} prob diff perf curves", chart=plot_diff_cdf(grouped)),
+        Figure(name=f"{cmp_name} samples by answer", chart=plot_by_group(grouped)),
+        Figure(name=f"{cmp_name} samples by fewshot", chart=plot_by_fewshot(grouped)),
+    ]
 
 
-def plot_diff_cdf(grouped: Dict[str, List[Scores]], figure_path: Path):
+def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
     charts = []
     for title, score_list in grouped.items():
         diff_cdf_data = []
@@ -173,10 +173,10 @@ def plot_diff_cdf(grouped: Dict[str, List[Scores]], figure_path: Path):
         charts.append(chart)
 
     final_chart = alt.hconcat(*charts)
-    final_chart.save(str(figure_path))
+    return final_chart
 
 
-def plot_by_group(grouped: Dict[str, List[Scores]], figure_path: Path):
+def plot_by_group(grouped: Dict[str, List[Scores]]) -> alt.Chart:
     charts = []
 
     for title, scores in grouped.items():
@@ -203,10 +203,10 @@ def plot_by_group(grouped: Dict[str, List[Scores]], figure_path: Path):
     final_chart = (
         alt.hconcat(*charts).resolve_axis(y="shared").resolve_scale(y="shared")
     )
-    final_chart.save(str(figure_path))
+    return final_chart
 
 
-def plot_by_fewshot(grouped: Dict[str, List[Scores]], figure_path: Path):
+def plot_by_fewshot(grouped: Dict[str, List[Scores]]) -> alt.Chart:
     fewshot_grouped: Dict[int, List[tuple[str, Scores]]] = defaultdict(list)
     for title, score_list in grouped.items():
         for s in score_list:
@@ -243,7 +243,7 @@ def plot_by_fewshot(grouped: Dict[str, List[Scores]], figure_path: Path):
     final_chart = (
         alt.hconcat(*charts).resolve_scale(y="shared").resolve_axis(y="shared")
     )
-    final_chart.save(str(figure_path), scale_factor=2.0)
+    return final_chart
 
 
 def by_fewshot(model_evals: List[ModelEval]):
