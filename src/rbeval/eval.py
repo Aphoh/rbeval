@@ -44,6 +44,7 @@ def main():
     parser.add_argument("--min_fewshot", type=int, default=0)
     parser.add_argument("--max_fewshot", type=int, default=0)
     parser.add_argument("-r", "--reformat", type=str)
+    parser.add_argument("--max_len", type=int, default=4096)
 
     args = parser.parse_args()
     model: str = args.model
@@ -56,6 +57,7 @@ def main():
     min_fewshot: int = args.min_fewshot
     max_fewshot: int = args.max_fewshot
     max_fewshot = max(min_fewshot, max_fewshot)
+    max_len: int = args.max_len
 
     if not output_path.exists():
         warnings.warn(f"Output path {output_path} does not exist, creating it")
@@ -67,7 +69,7 @@ def main():
 
     n_gpu = torch.cuda.device_count()
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(n_gpu)))
-    model_args = f"pretrained={model},dtype=auto,gpu_memory_utilization=0.7,tensor_parallel_size=1,data_parallel_size={n_gpu},max_model_len=4096"
+    model_args = f"pretrained={model},dtype=auto,gpu_memory_utilization=0.7,tensor_parallel_size=1,data_parallel_size={n_gpu},max_model_len={max_len}"
     fewshot = list(range(min_fewshot, max_fewshot + 1))
 
     for num_fewshot in fewshot:

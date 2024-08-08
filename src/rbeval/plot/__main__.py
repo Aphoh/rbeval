@@ -1,19 +1,21 @@
 import argparse
 from pathlib import Path
 import json
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 import numpy as np
 from dataclasses import asdict
 import re
 from rbeval.eval_spec import EvalSpec
 from rbeval.plot.data import Eval, EvalGroup, ModelEval
-from rbeval.plot.score_cdf import score_cdf
+from rbeval.plot.model_comp import model_comparer
 from tqdm import tqdm
+# from rbeval.plot.score_cdf import score_cdf
 
-plot_fns = [score_cdf]
+# plot_fns = [score_cdf, model_comparer]
+plot_fns = [model_comparer]
 
 
-def get_samples(inp: Path, name_filter: Optional[str]) -> Dict[str, EvalGroup]:
+def get_samples(inp: Path, name_filter: Optional[str]) -> List[EvalGroup]:
     groups: Dict[str, EvalGroup] = {}
 
     for spec_file in (pbar := tqdm(list(inp.glob("*.json")), desc="Reading specs")):
@@ -26,7 +28,7 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> Dict[str, EvalGroup]:
                 print(f"Skipping spec {spec_file.stem}")
                 continue
 
-        group = groups.setdefault(spec.group, EvalGroup(group=spec.group))
+        group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
         model_eval = ModelEval(eval_spec=spec)
         group.model_evals.append(model_eval)
         for samples_file in (spec_file.parent / spec_file.stem).glob(
@@ -60,7 +62,7 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> Dict[str, EvalGroup]:
                 np.save(str(cache_file), asdict(eval))  # type: ignore
                 model_eval.evals.append(eval)
 
-    return groups
+    return list(groups.values())
 
 
 def main():

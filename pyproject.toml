@@ -17,3 +17,7 @@ eval = [
 
 # Enables the usage of setuptools_scm
 [tool.setuptools_scm]
+
+[tool.mypy]
+check_untyped_defs = true
+files = ["tests", "src/rbeval"]
