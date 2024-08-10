@@ -27,16 +27,16 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                 print(f"Skipping spec {spec_file.stem}")
                 continue
 
-        group_cache_file = Path(
-            spec_file.with_stem(spec_file.stem + "_group_cache")
+        group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
+        model_eval_cache_file = Path(
+            spec_file.with_stem(spec_file.stem + "_cache")
         ).with_suffix(".npy")
-        if group_cache_file.exists():
-            res_dict = np.load(str(group_cache_file), allow_pickle=True).item()
-            group = from_dict(data_class=EvalGroup, data=res_dict)
-            groups[group.name] = group
+        if model_eval_cache_file.exists():
+            res_dict = np.load(str(model_eval_cache_file), allow_pickle=True).item()
+            model_eval = from_dict(data_class=ModelEval, data=res_dict)
+            groups[group.name].model_evals.append(model_eval)
             continue
         else:
-            group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
             model_eval = ModelEval(eval_spec=spec)
             group.model_evals.append(model_eval)
             for samples_file in (spec_file.parent / spec_file.stem).glob(
@@ -62,7 +62,7 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                     inc_logprobs=np.array(inc_logprobs),
                 )
                 model_eval.evals.append(eval)
-            np.save(str(group_cache_file), asdict(group))  # type: ignore
+            np.save(str(model_eval_cache_file), asdict(model_eval))  # type: ignore
 
     return list(groups.values())
 
