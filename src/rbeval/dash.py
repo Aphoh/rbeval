@@ -41,7 +41,7 @@ def cache_compare(dir, name_filter, base_name, compare_name):
 
 def main():
     parser = argparse.ArgumentParser(description="rbeval dashboard")
-    parser.add_argument("eval_dir", type=str)
+    parser.add_argument("eval_dir", type=str, default=".")
     args, rest = parser.parse_known_args()
     eval_dir = Path(args.eval_dir)
     # Show all the models
