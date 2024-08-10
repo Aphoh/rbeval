@@ -41,9 +41,9 @@ def cache_compare(dir, name_filter, base_name, compare_name):
 
 def main():
     parser = argparse.ArgumentParser(description="rbeval dashboard")
-    parser.add_argument("eval_dir", type=str, default=".")
+    parser.add_argument("--evals", type=str, default="./lmo-fake", required=False)
     args, rest = parser.parse_known_args()
-    eval_dir = Path(args.eval_dir)
+    eval_dir = Path(args.evals)
     # Show all the models
     score_cdf_data, cfgs = cached_score_cdf(eval_dir, None)
     for data, cfg in zip(score_cdf_data, cfgs):
