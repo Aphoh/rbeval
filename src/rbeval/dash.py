@@ -45,6 +45,7 @@ def main():
     args, rest = parser.parse_known_args()
     eval_dir = Path(args.evals)
     # Show all the models
+    st.set_page_config(layout="wide")
     score_cdf_data, cfgs = cached_score_cdf(eval_dir, None)
     for data, cfg in zip(score_cdf_data, cfgs):
         figs = plot_with_data(cfg, data)
