@@ -2,7 +2,7 @@ import argparse
 import altair as alt
 import pandas as pd
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 import itertools
 from typing import Dict, List, Optional
 import warnings
@@ -20,21 +20,18 @@ class Scores:
     cor_minus_inc_samples: List[np.ndarray] = field(default_factory=list)
     cor_samples: List[np.ndarray] = field(default_factory=list)
 
+    def to_dict(self):
+        return asdict(self)
 
-def model_comparer(samples: List[EvalGroup], rem_args: List[str]) -> List[Figure]:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--base", type=str)
-    parser.add_argument("--compare", type=str)
-    args = parser.parse_args(rem_args)
-    base_name_filt: Optional[str] = args.base
-    comp_name_filt: Optional[str] = args.compare
+    @classmethod
+    def from_dict(cls, d: dict):
+        d["spec"] = EvalSpec(**d["spec"])
+        return cls(**d)
 
-    if base_name_filt is None or comp_name_filt is None:
-        warnings.warn(
-            "Skipping model comparison plot, need to specify base and compare"
-        )
-        return []
 
+def get_scores(
+    samples: List[EvalGroup], base_name_filt: str, comp_name_filt: str
+) -> tuple[Dict[str, List[Scores]], str, str]:
     bases: List[ModelEval] = list(
         itertools.chain.from_iterable(
             g.collect_with_name(base_name_filt) for g in samples
@@ -107,12 +104,34 @@ def model_comparer(samples: List[EvalGroup], rem_args: List[str]) -> List[Figure
         for title, scores in scores_by_mask.items():
             grouped[title].append(scores)
 
+    return grouped, base_name, comp_name
+
+
+def get_figures(grouped: Dict[str, List[Scores]], base_name, comp_name) -> List[Figure]:
     cmp_name = f"{base_name} to {comp_name}"
     return [
         Figure(name=f"{cmp_name} prob diff perf curves", chart=plot_diff_cdf(grouped)),
         Figure(name=f"{cmp_name} samples by answer", chart=plot_by_group(grouped)),
         Figure(name=f"{cmp_name} samples by fewshot", chart=plot_by_fewshot(grouped)),
     ]
+
+
+def model_comparer(samples: List[EvalGroup], rem_args: List[str]) -> List[Figure]:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base", type=str)
+    parser.add_argument("--compare", type=str)
+    args = parser.parse_args(rem_args)
+    base_name_filt: Optional[str] = args.base
+    comp_name_filt: Optional[str] = args.compare
+
+    if base_name_filt is None or comp_name_filt is None:
+        warnings.warn(
+            "Skipping model comparison plot, need to specify base and compare"
+        )
+        return []
+
+    grouped, base_name, comp_name = get_scores(samples, base_name_filt, comp_name_filt)
+    return get_figures(grouped, base_name, comp_name)
 
 
 def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:

@@ -59,7 +59,7 @@ class CdfData:
 
     @classmethod
     def from_weights(
-        cls, weights: np.ndarray, scores: np.ndarray, max_p=1000
+        cls, weights: np.ndarray, scores: np.ndarray, max_p=600
     ) -> "CdfData":
         sort_perm = scores.argsort()
         base_weights = weights[sort_perm]

@@ -1,3 +1,4 @@
+from dataclasses import dataclass, field
 from typing import List
 
 from rbeval.plot.data import Eval, EvalGroup, Figure
@@ -9,25 +10,31 @@ import pandas as pd
 from rbeval.plot.utils import CdfData, renormed
 
 
+@dataclass
+class PlotData:
+    renorm: List[pd.DataFrame] = field(default_factory=list)
+    norenorm: List[pd.DataFrame] = field(default_factory=list)
+
+
+def plot_cfgs():
+    return [CorrectProbCdfPlot(), CorrIncorrDiffConfig()]
+
+
 def score_cdf(samples: List[EvalGroup], args: List[str]) -> List[Figure]:
     return [
-        Figure(
-            name="Correct Prob Perf Curve",
-            chart=plot_with_config(CorrectProbCdfPlot(), samples),
-        ),
-        Figure(
-            name="Corr-Incorr Gap Perf Curve",
-            chart=plot_with_config(CorrIncorrDiffConfig(), samples),
-        ),
+        a
+        for cfg in plot_cfgs()
+        for a in plot_with_data(cfg, get_plot_data(cfg, samples))
     ]
 
 
-def plot_with_config(
+def get_plot_data(
     cfg: "CdfPlotConfig",
     samples: List[EvalGroup],
-) -> alt.ConcatChart:
-    group_dfs = []
+) -> PlotData:
+    data = PlotData()
     for renorm in [True, False]:
+        gfs = data.renorm if renorm else data.norenorm
         for group in samples:
             dfs = []
             for m in group.model_evals:
@@ -38,43 +45,52 @@ def plot_with_config(
                         "x": cdf.scores,
                         "y": cdf.cdf_p,
                         "label": m.model_name,
+                        "group": group.name,
                         "renorm": renorm,
                         "fewshot": spec.fewshot,
                     }
                 )
                 dfs.append(df)
-            group_dfs.append(pd.concat(dfs))
+            gfs.append(pd.concat(dfs))
+    return data
 
-    selection = alt.selection_point(fields=["label"], bind="legend")
-    charts = []
-    for group, df in zip(samples, group_dfs):
-        chart = (
-            alt.Chart(df)
-            .mark_line()
-            .encode(
-                x=alt.X("x:Q", title=cfg.xlabel),
-                y=alt.Y("y:Q", title=cfg.ylabel),
-                color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
-                opacity=alt.condition(
-                    selection, alt.Opacity("fewshot:O"), alt.value(0.1)
-                ),
+
+def plot_with_data(
+    cfg: "CdfPlotConfig",
+    data: PlotData,
+) -> List[Figure]:
+    figures = []
+    for renorm, group_dfs in zip([True, False], [data.renorm, data.norenorm]):
+        for df in group_dfs:
+            group_name = df["group"].iloc[0]
+            selection = alt.selection_point(fields=["label"], bind="legend")
+            chart = (
+                alt.Chart(df)
+                .mark_line()
+                .encode(
+                    x=alt.X("x:Q", title=cfg.xlabel),
+                    y=alt.Y("y:Q", title=cfg.ylabel),
+                    color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
+                    opacity=alt.condition(
+                        selection, alt.Opacity("fewshot:O"), alt.value(0.1)
+                    ),
+                )
+                .properties(title=cfg.title(group_name, renorm), width=800, height=400)
+                .resolve_legend(color="independent")
+                .resolve_axis(y="independent", x="independent")
+                .add_params(selection)
+                .interactive()
             )
-            .properties(title=cfg.title(group.name, renorm))
-            .resolve_legend(color="independent")
-        )
+            figures.append(Figure(name=f"{group_name} {cfg.name}", chart=chart))
 
-        charts.append(chart)
-
-    final_chart = (
-        alt.concat(*charts, columns=len(samples)).add_params(selection).interactive()
-    )
-    return final_chart
+    return figures
 
 
 class CdfPlotConfig(ABC):
     plot_type: str
     xlabel: str
     ylabel: str
+    name: str = ""
 
     @abstractmethod
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
@@ -92,6 +108,8 @@ class CdfPlotConfig(ABC):
 
 
 class CorrectProbCdfPlot(CdfPlotConfig):
+    name = "Correct Prob Perf Curve"
+
     def __init__(self):
         self.plot_type = "corr perf plot"
         self.xlabel = "Correct answer probability"
@@ -112,6 +130,8 @@ class CorrectProbCdfPlot(CdfPlotConfig):
 
 
 class CorrIncorrDiffConfig(CdfPlotConfig):
+    name = "Corr-Incorr Gap Perf Curve"
+
     def __init__(self):
         self.plot_type = "corr-max(incor) perf plot"
         self.xlabel = "corr prob - max(incor prob)"

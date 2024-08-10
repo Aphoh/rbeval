@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 from collections import defaultdict
 import altair as alt
 
+from dacite import from_dict
 import numpy as np
 from tqdm import tqdm
 
@@ -26,18 +27,21 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                 print(f"Skipping spec {spec_file.stem}")
                 continue
 
-        group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
-        model_eval = ModelEval(eval_spec=spec)
-        group.model_evals.append(model_eval)
-        for samples_file in (spec_file.parent / spec_file.stem).glob(
-            "**/samples_*.json*"
-        ):
-            cache_file = samples_file.with_suffix(".npy")
-            if samples_file.with_suffix(".npy").exists():
-                model_eval.evals.append(
-                    Eval(**np.load(str(cache_file), allow_pickle=True).item())
-                )
-            else:
+        group_cache_file = Path(
+            spec_file.with_stem(spec_file.stem + "_group_cache")
+        ).with_suffix(".npy")
+        if group_cache_file.exists():
+            res_dict = np.load(str(group_cache_file), allow_pickle=True).item()
+            group = from_dict(data_class=EvalGroup, data=res_dict)
+            groups[group.name] = group
+            continue
+        else:
+            group = groups.setdefault(spec.group, EvalGroup(name=spec.group))
+            model_eval = ModelEval(eval_spec=spec)
+            group.model_evals.append(model_eval)
+            for samples_file in (spec_file.parent / spec_file.stem).glob(
+                "**/samples_*.json*"
+            ):
                 with open(samples_file, "r") as f:
                     if samples_file.suffix == ".jsonl":
                         docs = [json.loads(s) for s in f.readlines()]
@@ -57,8 +61,8 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                     cor_logprobs=np.array(cor_logprobs),
                     inc_logprobs=np.array(inc_logprobs),
                 )
-                np.save(str(cache_file), asdict(eval))  # type: ignore
                 model_eval.evals.append(eval)
+            np.save(str(group_cache_file), asdict(group))  # type: ignore
 
     return list(groups.values())
 
