@@ -4,7 +4,7 @@ from typing import Callable, List, Optional
 from rbeval.plot.data import EvalGroup, Figure, get_samples
 from rbeval.plot.model_comp import model_comparer
 from tqdm import tqdm
-from rbeval.plot.score_cdf_altair import score_cdf
+from rbeval.plot.score_cdf import score_cdf
 
 plot_fns: List[Callable[[List[EvalGroup], List[str]], List[Figure]]] = [
     score_cdf,
@@ -28,7 +28,7 @@ def main():
     for figure in (pbar := tqdm(figures, desc="Saving figures")):
         path = (figure_dir / figure.name.replace(".", "_")).with_suffix(".png")
         pbar.set_description(f"Saving {path.stem}")
-        figure.chart.save(str(path), scale_factor=2.0)
+        figure.chart.save(str(path), scale_factor=2.0)  # type: ignore
 
 
 if __name__ == "__main__":

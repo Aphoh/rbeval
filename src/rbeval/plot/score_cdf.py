@@ -1,91 +1,102 @@
-from pathlib import Path
+from dataclasses import dataclass, field
 from typing import List
 
-from rbeval.plot.data import Eval, EvalGroup
-from matplotlib import colormaps
-from matplotlib.axes import Axes
+from numpy._typing import NDArray
+from rbeval.plot.data import Eval, EvalGroup, Figure
 from abc import ABC, abstractmethod
 import numpy as np
+import altair as alt
+import pandas as pd
 
-from rbeval.plot.utils import CdfData, fig_axs_grid, renormed
-
-
-def score_cdf(samples: List[EvalGroup], figure_dir: Path, args: List[str]):
-    plot_with_config(CorrectProbCdfPlot(), samples, figure_dir / "corr_score_cdf.png")
-    plot_with_config(
-        CorrIncorrDiffConfig(), samples, figure_dir / "cor_incor_gap_cdf_png"
-    )
+from rbeval.plot.utils import CdfData, renormed
 
 
-def plot_with_config(
+@dataclass
+class PlotData:
+    renorm: List[pd.DataFrame] = field(default_factory=list)
+    norenorm: List[pd.DataFrame] = field(default_factory=list)
+
+
+def plot_cfgs():
+    return [CorrectProbCdfPlot(), CorrIncorrDiffConfig()]
+
+
+def score_cdf(samples: List[EvalGroup], args: List[str]) -> List[Figure]:
+    return [
+        a
+        for cfg in plot_cfgs()
+        for a in plot_with_data(cfg, get_plot_data(cfg, samples))
+    ]
+
+
+def get_plot_data(
     cfg: "CdfPlotConfig",
     samples: List[EvalGroup],
-    figure_out_path: Path,
-):
-    fig, axs = fig_axs_grid(2, len(samples))
-    for i, renorm in enumerate([True, False]):
-        for j, group in enumerate(samples):
-            ax = axs[i, j]
-            assert isinstance(ax, Axes)
-            colors = get_color_pallete(group)
-            for m, color in zip(group.model_evals, colors):
+) -> PlotData:
+    data = PlotData()
+    for renorm in [True, False]:
+        gfs = data.renorm if renorm else data.norenorm
+        for group in samples:
+            dfs: List[pd.DataFrame] = []
+            for m in group.model_evals:
                 spec = m.eval_spec
-                label = (
-                    group.model_label(m.model_name)
-                    if spec.fewshot == group.max_fewshots[m.model_name]
-                    else None
-                )
                 cdf = cfg.get_cdf(m.evals, renorm)
-                cdf.plot(ax, color, label)
-                cfg.plot_mark(ax)
-
-            if i == axs.shape[0] - 1:
-                ax.set_xlabel(cfg.xlabel)
-            if j == 0:
-                ax.set_ylabel(cfg.ylabel)
-            ax.set_title(cfg.title(group.name, renorm))
-            leg = ax.legend()
-            for h in leg.legend_handles:
-                assert h is not None
-                h.set_alpha(1.0)
-
-    fig.tight_layout()
-    fig.savefig(str(figure_out_path))
+                df = pd.DataFrame(
+                    {
+                        "x": cdf.scores,
+                        "y": cdf.cdf_p,
+                        "label": m.model_name,
+                        "group": group.name,
+                        "renorm": renorm,
+                        "fewshot": spec.fewshot,
+                    }
+                )
+                dfs.append(df)
+            gfs.append(pd.concat(dfs))
+    return data
 
 
-def get_color_pallete(group: EvalGroup) -> List[np.ndarray]:
-    mins = group.min_fewshots
-    maxs = group.max_fewshots
-    names = set(e.model_name for e in group.model_evals)
-    cmap_names = ["Greys", "Purples", "Greens", "Reds", "Blues", "Oranges"]
-    colors = {k: colormaps[v] for k, v in zip(names, cmap_names)}
+def plot_with_data(
+    cfg: "CdfPlotConfig",
+    data: PlotData,
+) -> List[Figure]:
+    figures: List[Figure] = []
+    for renorm, group_dfs in zip([True, False], [data.renorm, data.norenorm]):
+        for df in group_dfs:
+            group_name: str = str(df["group"].iloc[0])  # type: ignore
+            selection = alt.selection_point(fields=["label"], bind="legend")  # type: ignore
+            chart = (
+                alt.Chart(df)  # type: ignore
+                .mark_line()
+                .encode(
+                    x=alt.X("x:Q", title=cfg.xlabel),
+                    y=alt.Y("y:Q", title=cfg.ylabel),
+                    color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
+                    opacity=alt.condition(  # type: ignore
+                        selection,
+                        alt.Opacity("fewshot:O"),
+                        alt.value(0.1),  # type: ignore
+                    ),
+                )
+                .properties(title=cfg.title(group_name, renorm), width=800, height=400)
+                .resolve_legend(color="independent")
+                .resolve_axis(y="independent", x="independent")
+                .add_params(selection)
+                .interactive()
+            )
+            figures.append(Figure(name=f"{group_name} {cfg.name}", chart=chart))
 
-    res = []
-    for e in group.model_evals:
-        vmin, vmax = mins[e.model_name], maxs[e.model_name]
-        f = (e.eval_spec.fewshot + 1 - vmin) / (vmax + 2 - vmin)
-        res.append(colors[e.model_name]([f])[0])
-
-    return res
-
-
-def get_base_logits(probs):
-    logits = np.zeros(len(probs))
-    logits[0] = 1
-    rest = 1 - np.sum(probs)
-    assert (rest >= 0) and (rest <= 1)
+    return figures
 
 
 class CdfPlotConfig(ABC):
     plot_type: str
     xlabel: str
     ylabel: str
+    name: str = ""
 
     @abstractmethod
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
-        pass
-
-    def plot_mark(self, ax: Axes):
         pass
 
     def title(self, group_name: str, prob_renorm: bool) -> str:
@@ -95,40 +106,42 @@ class CdfPlotConfig(ABC):
         title += " " + self.plot_type
         return title
 
+    def marks(self) -> alt.Chart:
+        raise NotImplementedError()
+
 
 class CorrectProbCdfPlot(CdfPlotConfig):
+    name = "Correct Prob Perf Curve"
+
     def __init__(self):
         self.plot_type = "corr perf plot"
         self.xlabel = "Correct answer probability"
         self.ylabel = "% of correct answers with p > x"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
-        """Get's the CDF of the correct probability score
-
-        Args:
-            evals (List[Eval]): List of mc evals
-            prob_renorm (bool, optional): Whether to renormalize the correct probabilities by the sum of the correct and incorrect. Defaults to False.
-            sample_weight (str, optional): Mode to weight samples. Can be either "stat" or "uniform". Defaults to "stat".
-        """
         samples = [np.exp(e.cor_logprobs) for e in evals]
         if prob_renorm:
             samples = [renormed(e)[0] for e in evals]
         return CdfData.from_samples(samples)
 
-    def plot_mark(self, ax: Axes):
-        ax.axvline(0.25, linestyle="--", color="red", lw=0.25)
-        ax.axhline(0.75, linestyle="--", color="red", lw=0.25)
+    def marks(self) -> alt.Chart:
+        return (
+            alt.Chart(pd.DataFrame({"x": [0.25]}))  # type: ignore
+            .mark_rule()
+            .encode(x="x:Q", color=alt.value("red"))  # type: ignore
+        )
 
 
 class CorrIncorrDiffConfig(CdfPlotConfig):
+    name = "Corr-Incorr Gap Perf Curve"
+
     def __init__(self):
         self.plot_type = "corr-max(incor) perf plot"
         self.xlabel = "corr prob - max(incor prob)"
         self.ylabel = "% of samples with corr - max(incor) > x"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
-        """Get's the CDF of the difference between correct probability and highest incorrect probability"""
-        score_arrs = []
+        score_arrs: List[NDArray[np.float64]] = []
         for e in evals:
             if prob_renorm:
                 cor_probs, inc_probs = renormed(e)
@@ -140,5 +153,9 @@ class CorrIncorrDiffConfig(CdfPlotConfig):
 
         return CdfData.from_samples(score_arrs, per_sample_weighting=True)
 
-    def plot_mark(self, ax: Axes):
-        ax.axvline(0.0, linestyle="--", color="red", lw=0.25)
+    def marks(self) -> alt.Chart:
+        return (
+            alt.Chart(pd.DataFrame({"x": [0.5]}))  # type: ignore
+            .mark_rule()
+            .encode(x="x:Q", color=alt.value("red"))  # type: ignore
+        )

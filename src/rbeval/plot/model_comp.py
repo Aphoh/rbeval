@@ -2,7 +2,7 @@ import argparse
 import altair as alt
 import pandas as pd
 from collections import defaultdict
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 import itertools
 from typing import Dict, List, Optional
 import warnings
@@ -12,6 +12,7 @@ import numpy as np
 from rbeval.eval_spec import EvalSpec
 from rbeval.plot.data import EvalGroup, Figure, ModelEval
 from rbeval.plot.utils import CdfData, renormed
+from typing import Any
 
 
 @dataclass
@@ -19,14 +20,6 @@ class Scores:
     spec: EvalSpec
     cor_minus_inc_samples: List[np.ndarray] = field(default_factory=list)
     cor_samples: List[np.ndarray] = field(default_factory=list)
-
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        d["spec"] = EvalSpec(**d["spec"])
-        return cls(**d)
 
 
 def get_scores(
@@ -107,7 +100,9 @@ def get_scores(
     return grouped, base_name, comp_name
 
 
-def get_figures(grouped: Dict[str, List[Scores]], base_name, comp_name) -> List[Figure]:
+def get_figures(
+    grouped: Dict[str, List[Scores]], base_name: str, comp_name: str
+) -> List[Figure]:
     cmp_name = f"{base_name} to {comp_name}"
     return [
         Figure(name=f"{cmp_name} prob diff perf curves", chart=plot_diff_cdf(grouped)),
@@ -135,10 +130,10 @@ def model_comparer(samples: List[EvalGroup], rem_args: List[str]) -> List[Figure
 
 
 def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
-    charts = []
+    charts: List[alt.VConcatChart] = []
     for title, score_list in grouped.items():
-        diff_cdf_data = []
-        corr_cdf_data = []
+        diff_cdf_data: List[pd.DataFrame] = []
+        corr_cdf_data: List[pd.DataFrame] = []
         for score in score_list:
             diff_cdf = CdfData.from_samples(score.cor_minus_inc_samples)
             diff_cdf_data.append(
@@ -166,7 +161,7 @@ def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
         diff_cdf_df = pd.concat(diff_cdf_data)
         corr_cdf_df = pd.concat(corr_cdf_data)
         diff_cdf_chart = (
-            alt.Chart(diff_cdf_df)
+            alt.Chart(diff_cdf_df)  # type: ignore
             .mark_line()
             .encode(
                 x=alt.X("p:Q"),
@@ -176,8 +171,8 @@ def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
             )
             .properties(title=f"{title}, tuned - base", width=300, height=200)
         )
-        corr_cdf_chart = (
-            alt.Chart(corr_cdf_df)
+        corr_cdf_chart: alt.Chart = (
+            alt.Chart(corr_cdf_df)  # type: ignore
             .mark_line()
             .encode(
                 x=alt.X("p:Q"),
@@ -188,26 +183,26 @@ def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
             .properties(title=f"{title}, tuned cor - max(inc)", width=300, height=200)
         )
 
-        chart = alt.vconcat(diff_cdf_chart, corr_cdf_chart)
+        chart: alt.VConcatChart = alt.vconcat(diff_cdf_chart, corr_cdf_chart)  # type: ignore
         charts.append(chart)
 
-    final_chart = alt.hconcat(*charts)
+    final_chart = alt.hconcat(*charts)  # type: ignore
     return final_chart
 
 
-def plot_by_group(grouped: Dict[str, List[Scores]]) -> alt.Chart:
-    charts = []
+def plot_by_group(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
+    charts: List[alt.Chart] = []
 
     for title, scores in grouped.items():
-        data = []
+        data: List[Dict[str, Any]] = []
         for s in scores:
             cnt = sum(len(a) for a in s.cor_minus_inc_samples)
             fs = s.spec.fewshot
             data.append({"Fewshot": fs, "Count": cnt, "Model": s.spec.model_name})
 
         df = pd.DataFrame(data)
-        chart = (
-            alt.Chart(df)
+        chart: alt.Chart = (
+            alt.Chart(df)  # type: ignore
             .mark_bar()
             .encode(
                 x=alt.X("Fewshot:O", title="Fewshot"),
@@ -220,20 +215,20 @@ def plot_by_group(grouped: Dict[str, List[Scores]]) -> alt.Chart:
         charts.append(chart)
 
     final_chart = (
-        alt.hconcat(*charts).resolve_axis(y="shared").resolve_scale(y="shared")
+        alt.hconcat(*charts).resolve_axis(y="shared").resolve_scale(y="shared")  # type: ignore
     )
     return final_chart
 
 
-def plot_by_fewshot(grouped: Dict[str, List[Scores]]) -> alt.Chart:
+def plot_by_fewshot(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
     fewshot_grouped: Dict[int, List[tuple[str, Scores]]] = defaultdict(list)
     for title, score_list in grouped.items():
         for s in score_list:
             fewshot_grouped[s.spec.fewshot].append((title, s))
 
-    charts = []
+    charts: List[alt.Chart] = []
     for fs, title_score_pairs in sorted(fewshot_grouped.items()):
-        data = []
+        data: List[Dict[str, Any]] = []
         for title, scores in title_score_pairs:
             cnt = sum(len(a) for a in scores.cor_minus_inc_samples)
             data.append(
@@ -247,7 +242,7 @@ def plot_by_fewshot(grouped: Dict[str, List[Scores]]) -> alt.Chart:
 
         df = pd.DataFrame(data)
         chart = (
-            alt.Chart(df)
+            alt.Chart(df)  # type: ignore
             .mark_bar()
             .encode(
                 x=alt.X("Title:O", title="Categories"),
@@ -260,7 +255,7 @@ def plot_by_fewshot(grouped: Dict[str, List[Scores]]) -> alt.Chart:
         charts.append(chart)
 
     final_chart = (
-        alt.hconcat(*charts).resolve_scale(y="shared").resolve_axis(y="shared")
+        alt.hconcat(*charts).resolve_scale(y="shared").resolve_axis(y="shared")  # type: ignore
     )
     return final_chart
 

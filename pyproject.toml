@@ -1,11 +1,11 @@
 [build-system]
-requires = ["setuptools>=68", "setuptools_scm[toml]>=8"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "rbeval"
+version = "0.1.0"
 requires-python = ">=3.8"
-dynamic = ["version"]
 dependencies = [
     "pandas>=2.2.2",
     "matplotlib>=3.9.1",
@@ -20,9 +20,6 @@ dependencies = [
 eval = [
     "lm-eval[vllm]==0.4.3"
 ]
-
-# Enables the usage of setuptools_scm
-[tool.setuptools_scm]
 
 [tool.mypy]
 check_untyped_defs = true

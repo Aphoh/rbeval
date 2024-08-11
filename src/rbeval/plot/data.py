@@ -10,6 +10,7 @@ import altair as alt
 from dacite import from_dict
 import numpy as np
 from tqdm import tqdm
+from numpy.typing import NDArray
 
 from rbeval.eval_spec import EvalSpec
 
@@ -49,11 +50,11 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                         assert samples_file.suffix == ".json"
                         docs = json.load(f)
 
-                cor_logprobs = []
-                inc_logprobs = []
+                cor_logprobs: List[float] = []
+                inc_logprobs: List[List[float]] = []
                 for doc in docs:
                     target = doc["target"]
-                    probs = [float(a[0][0]) for a in doc["resps"]]
+                    probs: List[float] = [float(a[0][0]) for a in doc["resps"]]
                     cor_logprobs.append(probs.pop(target))
                     inc_logprobs.append(probs)
                 eval = Eval(
@@ -78,14 +79,14 @@ class Eval:
     def task_name(self) -> str:
         return self.name.rsplit("_", 1)[0]
 
-    def filter_inds(self, where: np.ndarray) -> "Eval":
+    def filter_inds(self, where: NDArray[np.int64]) -> "Eval":
         return Eval(
             name=self.name,
             cor_logprobs=self.cor_logprobs[where],
             inc_logprobs=self.inc_logprobs[where],
         )
 
-    def filter_mask(self, mask: np.ndarray) -> "Eval":
+    def filter_mask(self, mask: NDArray[np.bool_]) -> "Eval":
         return self.filter_inds(np.where(mask)[0])
 
 
@@ -128,10 +129,10 @@ class EvalGroup:
             res[me.model_name] = max(res[me.model_name], me.eval_spec.fewshot)
         return res
 
-    def model_label(self, model_name) -> str:
+    def model_label(self, model_name: str) -> str:
         return f"{model_name} fs{self.min_fewshots[model_name]}-{self.max_fewshots[model_name]}"
 
-    def collect_with_name(self, name_filt) -> List[ModelEval]:
+    def collect_with_name(self, name_filt: str) -> List[ModelEval]:
         """Collects all evals that contain the model_name"""
         return [
             m for m in self.model_evals if re.match(name_filt, m.model_name) is not None
