@@ -151,3 +151,4 @@ class Figure:
         | alt.ConcatChart
         | alt.VConcatChart
     )
+    group: Optional[str] = None

@@ -25,7 +25,8 @@ def score_cdf(samples: List[EvalGroup], args: List[str]) -> List[Figure]:
     return [
         a
         for cfg in plot_cfgs()
-        for a in plot_with_data(cfg, get_plot_data(cfg, samples))
+        for renorm in [True, False]
+        for a in plot_with_data(cfg, get_plot_data(cfg, samples), renorm)
     ]
 
 
@@ -59,32 +60,36 @@ def get_plot_data(
 def plot_with_data(
     cfg: "CdfPlotConfig",
     data: PlotData,
+    renorm: bool = True,
 ) -> List[Figure]:
     figures: List[Figure] = []
-    for renorm, group_dfs in zip([True, False], [data.renorm, data.norenorm]):
-        for df in group_dfs:
-            group_name: str = str(df["group"].iloc[0])  # type: ignore
-            selection = alt.selection_point(fields=["label"], bind="legend")  # type: ignore
-            chart = (
-                alt.Chart(df)  # type: ignore
-                .mark_line()
-                .encode(
-                    x=alt.X("x:Q", title=cfg.xlabel),
-                    y=alt.Y("y:Q", title=cfg.ylabel),
-                    color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
-                    opacity=alt.condition(  # type: ignore
-                        selection,
-                        alt.Opacity("fewshot:O"),
-                        alt.value(0.1),  # type: ignore
-                    ),
-                )
-                .properties(title=cfg.title(group_name, renorm), width=800, height=400)
-                .resolve_legend(color="independent")
-                .resolve_axis(y="independent", x="independent")
-                .add_params(selection)
-                .interactive()
+    group_dfs = data.renorm if renorm else data.norenorm
+    for df in group_dfs:
+        group_name: str = str(df["group"].iloc[0])  # type: ignore
+        label_selection = alt.selection_point(fields=["label"], bind="legend")  # type: ignore
+        fs_selection = alt.selection_point(fields=["fewshot"], bind="legend")  # type: ignore
+        chart = (
+            alt.Chart(df)  # type: ignore
+            .mark_line()
+            .encode(
+                x=alt.X("x:Q", title=cfg.xlabel),
+                y=alt.Y("y:Q", title=cfg.ylabel),
+                color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
+                opacity=alt.condition(  # type: ignore
+                    label_selection & fs_selection,
+                    alt.Opacity("fewshot:O"),
+                    alt.value(0.0),  # type: ignore
+                ),
             )
-            figures.append(Figure(name=f"{group_name} {cfg.name}", chart=chart))
+            .properties(title=cfg.title(group_name, renorm), width=800, height=400)
+            .resolve_legend(color="independent")
+            .resolve_axis(y="independent", x="independent")
+            .add_params(fs_selection, label_selection)
+            .interactive()
+        )
+        figures.append(
+            Figure(name=f"{group_name} {cfg.name}", chart=chart, group=group_name)
+        )
 
     return figures
 
