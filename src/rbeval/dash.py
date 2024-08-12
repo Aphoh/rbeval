@@ -5,6 +5,7 @@ import streamlit as st
 import argparse
 from dacite import from_dict
 
+from rbeval.plot.dash_utils import markdown_insert_images
 from rbeval.plot.data import EvalGroup, get_samples
 from rbeval.plot.score_cdf import (
     CdfPlotConfig,
@@ -69,8 +70,20 @@ def main():
     # Show all the models
 
     st.set_page_config(layout="wide")
+
+    with st.expander("README", expanded=True):
+        with open("README.md", "r") as f:
+            markdown = f.read().split("---", 2)[-1]
+            st.markdown(markdown_insert_images(markdown), unsafe_allow_html=True)
+
     score_cdf_data, cfgs = cached_score_cdf(eval_dir, None)
     group_names = sorted([g.name for g in cached_samples(eval_dir, None)])
+
+    st.markdown("""
+    Below is a toggle which renormalizes multiple choice answer probabilities to sum to 1.
+    For more performant models (anything after Llama 1) or in higher fewshot scenarios, this doesn't impact the results very much.
+    """)
+
     renormed = st.toggle("Renormalize Probabilities", True)
 
     st.subheader("Model Performance Curves")

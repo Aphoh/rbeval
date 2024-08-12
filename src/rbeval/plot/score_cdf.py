@@ -74,7 +74,9 @@ def plot_with_data(
             .encode(
                 x=alt.X("x:Q", title=cfg.xlabel),
                 y=alt.Y("y:Q", title=cfg.ylabel),
-                color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0, labelLimit=1000)).scale(scheme="set1"),
+                color=alt.Color(
+                    "label:N", legend=alt.Legend(symbolOpacity=1.0, labelLimit=1000)
+                ).scale(scheme="set1"),
                 opacity=alt.condition(  # type: ignore
                     label_selection & fs_selection,
                     alt.Opacity("fewshot:O"),
@@ -86,8 +88,8 @@ def plot_with_data(
             .interactive()
         )
         if cfg.xline is not None:
-            line = alt.Chart(pd.DataFrame({'x': [cfg.xline]})).mark_rule().encode(x='x')
-            chart = chart + line # type: ignore
+            line = alt.Chart(pd.DataFrame({"x": [cfg.xline]})).mark_rule().encode(x="x")
+            chart = chart + line  # type: ignore
         figures.append(
             Figure(name=f"{group_name} {cfg.name}", chart=chart, group=group_name)
         )
@@ -96,7 +98,6 @@ def plot_with_data(
 
 
 class CdfPlotConfig(ABC):
-    plot_type: str
     xlabel: str
     ylabel: str
     name: str = ""
@@ -110,7 +111,7 @@ class CdfPlotConfig(ABC):
         title = group_name
         if prob_renorm:
             title += " renormed"
-        title += " " + self.plot_type
+        title += " " + self.name
         return title
 
     def marks(self) -> alt.Chart:
@@ -118,13 +119,10 @@ class CdfPlotConfig(ABC):
 
 
 class CorrectProbCdfPlot(CdfPlotConfig):
-    name = "Correct Prob Perf Curve"
+    name = "𝚽 Performance Curve"
+    xlabel = "𝚽"
+    ylabel = "% of correct answers with 𝚽 > x"
     xline = 0.25
-
-    def __init__(self):
-        self.plot_type = "corr perf plot"
-        self.xlabel = "Correct answer probability"
-        self.ylabel = "% of correct answers with p > x"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
         samples = [np.exp(e.cor_logprobs) for e in evals]
@@ -134,13 +132,10 @@ class CorrectProbCdfPlot(CdfPlotConfig):
 
 
 class CorrIncorrDiffConfig(CdfPlotConfig):
-    name = "Corr-Incorr Gap Perf Curve"
+    name = "𝚫 Performance Curve"
     xline = 0.0
-
-    def __init__(self):
-        self.plot_type = "corr-max(incor) perf plot"
-        self.xlabel = "corr prob - max(incor prob)"
-        self.ylabel = "% of samples with corr - max(incor) > x"
+    xlabel = "𝚫"
+    ylabel = "% of samples with 𝚫 > x"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
         score_arrs: List[NDArray[np.float64]] = []
