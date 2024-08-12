@@ -83,7 +83,7 @@ def main():
                 for fig in plot_with_data(cdf, data, renormed)
             ]
             for fig in figs:
-                st.altair_chart(fig.chart)  # type: ignore
+                st.altair_chart(fig.chart, use_container_width=True)  # type: ignore
 
     model_names = set(
         [

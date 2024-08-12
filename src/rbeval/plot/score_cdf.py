@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 from numpy._typing import NDArray
 from rbeval.plot.data import Eval, EvalGroup, Figure
@@ -74,19 +74,20 @@ def plot_with_data(
             .encode(
                 x=alt.X("x:Q", title=cfg.xlabel),
                 y=alt.Y("y:Q", title=cfg.ylabel),
-                color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0)),
+                color=alt.Color("label:N", legend=alt.Legend(symbolOpacity=1.0, labelLimit=1000)).scale(scheme="set1"),
                 opacity=alt.condition(  # type: ignore
                     label_selection & fs_selection,
                     alt.Opacity("fewshot:O"),
                     alt.value(0.0),  # type: ignore
                 ),
             )
-            .properties(title=cfg.title(group_name, renorm), width=800, height=400)
-            .resolve_legend(color="independent")
-            .resolve_axis(y="independent", x="independent")
+            .properties(title=cfg.title(group_name, renorm))
             .add_params(fs_selection, label_selection)
             .interactive()
         )
+        if cfg.xline is not None:
+            line = alt.Chart(pd.DataFrame({'x': [cfg.xline]})).mark_rule().encode(x='x')
+            chart = chart + line # type: ignore
         figures.append(
             Figure(name=f"{group_name} {cfg.name}", chart=chart, group=group_name)
         )
@@ -99,6 +100,7 @@ class CdfPlotConfig(ABC):
     xlabel: str
     ylabel: str
     name: str = ""
+    xline: Optional[float] = None
 
     @abstractmethod
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "CdfData":
@@ -117,6 +119,7 @@ class CdfPlotConfig(ABC):
 
 class CorrectProbCdfPlot(CdfPlotConfig):
     name = "Correct Prob Perf Curve"
+    xline = 0.25
 
     def __init__(self):
         self.plot_type = "corr perf plot"
@@ -129,16 +132,10 @@ class CorrectProbCdfPlot(CdfPlotConfig):
             samples = [renormed(e)[0] for e in evals]
         return CdfData.from_samples(samples)
 
-    def marks(self) -> alt.Chart:
-        return (
-            alt.Chart(pd.DataFrame({"x": [0.25]}))  # type: ignore
-            .mark_rule()
-            .encode(x="x:Q", color=alt.value("red"))  # type: ignore
-        )
-
 
 class CorrIncorrDiffConfig(CdfPlotConfig):
     name = "Corr-Incorr Gap Perf Curve"
+    xline = 0.0
 
     def __init__(self):
         self.plot_type = "corr-max(incor) perf plot"
@@ -157,10 +154,3 @@ class CorrIncorrDiffConfig(CdfPlotConfig):
             score_arrs.append(cor_probs - inc_probs.max(axis=1))
 
         return CdfData.from_samples(score_arrs, per_sample_weighting=True)
-
-    def marks(self) -> alt.Chart:
-        return (
-            alt.Chart(pd.DataFrame({"x": [0.5]}))  # type: ignore
-            .mark_rule()
-            .encode(x="x:Q", color=alt.value("red"))  # type: ignore
-        )
