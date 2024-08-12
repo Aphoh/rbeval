@@ -1,7 +1,6 @@
 .venv
 lm-outputs*
 lmo*
-*.png
 .vscode/launch.json
 scratch
 
