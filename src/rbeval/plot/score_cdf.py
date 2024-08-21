@@ -117,22 +117,22 @@ class CdfPlotConfig(ABC):
 
 
 class CorrectProbCdfPlot(CdfPlotConfig):
-    name = "CDF(𝚽)"
+    name = "1-CDF(𝚽)"
     xlabel = "𝚽"
-    ylabel = "% of correct answers with 𝚽 < x"
+    ylabel = "% of correct answers with 𝚽 > x"
     xline = 0.25
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
         samples = [np.exp(e.cor_logprobs) for e in evals]
         if prob_renorm:
             samples = [renormed(e)[0] for e in evals]
-        return PlotData.perf_curve_from_samples(samples)
+        return PlotData.perf_curve_from_samples(samples, one_minus=True)
 
 
 class MaxIncorProbCdfPlot(CdfPlotConfig):
-    name = "CDF(Max(Incorrect))"
+    name = "1-CDF(Max(Incorrect))"
     xlabel = "max(incorrect)"
-    ylabel = "% of correct answers with max(incorrect) < x"
+    ylabel = "% of correct answers with max(incorrect) > x"
     xline = 0.25
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
@@ -140,7 +140,7 @@ class MaxIncorProbCdfPlot(CdfPlotConfig):
             samples = [renormed(e)[1].max(axis=1) for e in evals]
         else:
             samples = [np.exp(np.max(e.inc_logprobs, axis=1)) for e in evals]
-        return PlotData.perf_curve_from_samples(samples)
+        return PlotData.perf_curve_from_samples(samples, one_minus=True)
 
 
 class AccVsLoss(CdfPlotConfig):
@@ -150,13 +150,16 @@ class AccVsLoss(CdfPlotConfig):
     xline = None
     type = "scatter"
 
-    def get_cdf(self, evals: List[Eval], _prob_renorm: bool) -> "PlotData":
+    def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
         cor, incor = zip(*[renormed(e) for e in evals])
         cor = np.concatenate(cor)
         incor = np.concatenate(incor).max(axis=1)
         pct_corr = np.mean(cor > incor)
 
-        celoss = np.mean(-np.log(cor))
+        scores, labels, weights = roc_data(evals, prob_renorm)
+        pos_case = labels * np.log(np.clip(scores, 1e-7, 1))
+        neg_case = (1 - labels) * np.log(np.clip(1 - scores, 0, 1 - 1e-7))
+        celoss = -np.sum(weights * (pos_case + neg_case))
         return PlotData(np.array([celoss]), np.array([pct_corr]))
 
 
@@ -179,10 +182,10 @@ class AccVsAUC(CdfPlotConfig):
 
 
 class CorrIncorrDiffConfig(CdfPlotConfig):
-    name = "CDF(𝚫)"
+    name = "1-CDF(𝚫)"
     xline = 0.0
     xlabel = "𝚫"
-    ylabel = "% of samples with 𝚫 < x"
+    ylabel = "% of samples with 𝚫 > x"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
         score_arrs: List[NDArray[np.float64]] = []
@@ -195,7 +198,9 @@ class CorrIncorrDiffConfig(CdfPlotConfig):
 
             score_arrs.append(cor_probs - inc_probs.max(axis=1))
 
-        return PlotData.perf_curve_from_samples(score_arrs, per_sample_weighting=True)
+        return PlotData.perf_curve_from_samples(
+            score_arrs, per_sample_weighting=True, one_minus=True
+        )
 
 
 class ROCCurve(CdfPlotConfig):

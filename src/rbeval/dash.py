@@ -57,7 +57,7 @@ def main():
 
     st.set_page_config(layout="wide")
 
-    with st.expander("README", expanded=True):
+    with st.expander("README", expanded=False):
         with open("README.md", "r") as f:
             markdown = f.read().split("---", 2)[-1]
             st.markdown(markdown_insert_images(markdown), unsafe_allow_html=True)
@@ -74,9 +74,10 @@ def main():
     """)
 
     renormed = st.toggle("Renormalize Probabilities", True)
-    fs_names = [str(i) + "-shot" for i in range(0, 5 + 1)]
-    fs_filt_sel = st.multiselect("Fewshot Filter", fs_names, default=fs_names)
-    fs_filt = [int(i.split("-")[0]) for i in fs_filt_sel]
+    # fs_names = [str(i) + "-shot" for i in range(0, 5 + 1)]
+    # fs_filt_sel = st.multiselect("Fewshot Filter", fs_names, default=fs_names)
+    # fs_filt = [int(i.split("-")[0]) for i in fs_filt_sel]
+    fs_filt = [i for i in range(0, 5 + 1) if st.checkbox(f"{i}-shot", True)]
 
     st.subheader("Model Performance Curves")
     for group in group_names:
