@@ -17,14 +17,14 @@ This dashboard is best viewed at [the huggingface space](https://huggingface.co/
 
 LLM MCQA (multiple choice question-answering) benchmarks are measured in the following way:
 1. Some number of few shot examples are pulled from the validation set of the MCQA benchmark and formatted as
-    > **Quesiton**: What is the capital of France? \
+    > **Question**: What is the capital of France? \
     > (A) Paris \
     > (B) London \
     > (C) Berlin \
     > (D) Madrid \
     > **Answer**: A
 2. The target question is then appended, without the answer, and fed into the model as
-    > **Quesiton**: What is the capital of France? \
+    > **Question**: What is the capital of France? \
     > (A) Paris \
     > (B) London \
     > (C) Berlin \
@@ -62,6 +62,7 @@ Here, $\Delta$ is a measure of how much more confident the model is in the corre
 
 An ideal model would have $\Phi = 1$ (and therefore $\Delta=1$) always, while a model that performs random guessing would have $p_i = \Phi = 0.25$ (and therefore $\Delta=0$) always.
 
+<!---
 ### Reading $\Phi$ plots
 Let's look at an example: MMLU on Llama-7b and Guanaco-7b, an early example of instruction tuning, in the 5-shot setting.
 
@@ -81,7 +82,7 @@ Again, the <span style="color:lightblue">**blue line is Llama-7b**</span> and th
 * The 'accuracy' as we defined earlier is the percentage of samples with $\Delta > 0$. We can see this as the intersection of the curves with the vertical line at $\Delta = 0$. We can see that while instruction tuning doesn't seem to have changed the accuracy significantly, it has *vastly* altered the distribution of $\Delta$ values.
 * Guanaco-7b has a higher percentage of samples with large $\Delta$ values than Llama-7b. For example, in ~12-13% of the samples, Guanaco-7b predicts the correct answer with a probability at least 0.2 greater than the most confident incorrect answer.
 * Guanaco-7b also has a higher percentage of samples with very low $\Delta$ values. For example, we can read that ~75% of the samples have $\Delta > -0.2$, meaning that ~25% have $\Delta \leq -0.2$. This means that Guanaco-7b predicts the wrong answer with a probability at least 0.2 greater than the correct answer in 25% of the samples, when compared to Llama-7b which only does that in ~6-7% of the samples.
-
+-->
 
 ## How to use this notebook
 

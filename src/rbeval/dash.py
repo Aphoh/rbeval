@@ -1,6 +1,7 @@
 from dataclasses import asdict
 from pathlib import Path
 from typing import List, Optional
+import pandas as pd
 import streamlit as st
 import argparse
 from dacite import from_dict
@@ -9,7 +10,6 @@ from rbeval.plot.dash_utils import markdown_insert_images
 from rbeval.plot.data import EvalGroup, get_samples
 from rbeval.plot.score_cdf import (
     CdfPlotConfig,
-    PlotData,
     plot_with_data,
     get_plot_data,
     plot_cfgs,
@@ -29,7 +29,7 @@ def cached_samples(dir: Path, name_filter: Optional[str]) -> List[EvalGroup]:
 @st.cache_data
 def cached_score_cdf(
     dir: Path, name_filter: Optional[str]
-) -> tuple[List[PlotData], List[CdfPlotConfig]]:
+) -> tuple[List[pd.DataFrame], List[CdfPlotConfig]]:
     samples = cached_samples(dir, name_filter)
     cfgs = plot_cfgs()
     data = [get_plot_data(cfg, samples) for cfg in cfgs]
@@ -48,20 +48,6 @@ def cache_compare(
     return grouped_dict, base_name, comp_name
 
 
-def filter_for_group(data: List[PlotData], group: str) -> List[PlotData]:
-    return [
-        PlotData(
-            renorm=[df for df in d.renorm if df["group"].iloc[0] == group],
-            norenorm=[df for df in d.norenorm if df["group"].iloc[0] == group],
-        )
-        for d in data
-    ]
-
-
-def get_group_names(data: List[PlotData]) -> List[str]:
-    return sorted(set([df["group"].iloc[0] for d in data for df in d.renorm]))
-
-
 def main():
     parser = argparse.ArgumentParser(description="rbeval dashboard")
     parser.add_argument("--evals", type=str, default="./lmo-fake", required=False)
@@ -77,26 +63,32 @@ def main():
             st.markdown(markdown_insert_images(markdown), unsafe_allow_html=True)
 
     score_cdf_data, cfgs = cached_score_cdf(eval_dir, None)
-    group_names = sorted([g.name for g in cached_samples(eval_dir, None)])
+    assert len(score_cdf_data) > 0, "No score cdfs found"
+    group_names: List[str] = sorted(
+        score_cdf_data[0]["group"].unique().tolist(), reverse=True
+    )
 
     st.markdown("""
-    Below is a toggle which renormalizes multiple choice answer probabilities to sum to 1.
+    Below is a toggle which renormalizes the multiple choice answer probabilities to sum to 1.
     For more performant models (anything after Llama 1) or in higher fewshot scenarios, this doesn't impact the results very much.
     """)
 
     renormed = st.toggle("Renormalize Probabilities", True)
+    fs_names = [str(i) + "-shot" for i in range(0, 5 + 1)]
+    fs_filt_sel = st.multiselect("Fewshot Filter", fs_names, default=fs_names)
+    fs_filt = [int(i.split("-")[0]) for i in fs_filt_sel]
 
     st.subheader("Model Performance Curves")
     for group in group_names:
-        group_data = filter_for_group(score_cdf_data, group)
         with st.expander(group):
-            figs = [
-                fig
-                for data, cdf in zip(group_data, cfgs)
-                for fig in plot_with_data(cdf, data, renormed)
-            ]
-            for fig in figs:
-                st.altair_chart(fig.chart, use_container_width=True)  # type: ignore
+            for cfg, df in zip(cfgs, score_cdf_data):
+                group_data = df[
+                    (df["group"] == group)
+                    & (df["renorm"] == renormed)
+                    & (df["fewshot"].isin(fs_filt))
+                ]
+                for fig in plot_with_data(cfg, group_data):
+                    st.altair_chart(fig.chart, use_container_width=True)  # type: ignore
 
     model_names = set(
         [

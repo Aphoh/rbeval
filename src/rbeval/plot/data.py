@@ -59,8 +59,8 @@ def get_samples(inp: Path, name_filter: Optional[str]) -> List["EvalGroup"]:
                     inc_logprobs.append(probs)
                 eval = Eval(
                     name=samples_file.stem,
-                    cor_logprobs=np.array(cor_logprobs),
-                    inc_logprobs=np.array(inc_logprobs),
+                    cor_logprobs=np.array(cor_logprobs, dtype=np.float64),
+                    inc_logprobs=np.array(inc_logprobs, dtype=np.float64),
                 )
                 model_eval.evals.append(eval)
             np.save(str(model_eval_cache_file), asdict(model_eval))  # type: ignore

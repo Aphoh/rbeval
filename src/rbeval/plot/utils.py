@@ -17,14 +17,17 @@ def renormed(eval: Eval) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
 
 
 @dataclass
-class CdfData:
-    cdf_p: np.ndarray
-    scores: np.ndarray
+class PlotData:
+    y: np.ndarray
+    x: np.ndarray
 
     @classmethod
-    def from_samples(
-        cls, samples: List[NDArray[np.float64]], per_sample_weighting: bool = True
-    ) -> "CdfData":
+    def perf_curve_from_samples(
+        cls,
+        samples: List[NDArray[np.float64]],
+        per_sample_weighting: bool = True,
+        one_minus: bool = False,
+    ) -> "PlotData":
         num_cats = len(samples)
         scores = np.concatenate(samples)
         if per_sample_weighting:
@@ -37,26 +40,29 @@ class CdfData:
             weights = np.concatenate(weight_arrs)
         else:
             weights = np.ones_like(scores) / len(scores)
-        return cls.from_weights(weights, scores)
+        return cls.perf_curve_from_weights(weights, scores, one_minus=one_minus)
 
     @classmethod
-    def from_weights(
+    def perf_curve_from_weights(
         cls,
         weights: NDArray[np.float64],
         base_scores: NDArray[np.float64],
         max_p: int = 600,
-    ) -> "CdfData":
+        one_minus: bool = True,
+    ) -> "PlotData":
         sort_perm = base_scores.argsort()
         base_weights = weights[sort_perm]
         base_scores = base_scores[sort_perm]
-        base_cdf_p = 1 - np.cumsum(base_weights)
+        base_cdf_p = np.cumsum(base_weights)
+        if one_minus:
+            base_cdf_p = 1 - base_cdf_p
         minscore, maxscore = base_scores[0], base_scores[-1]
         if len(base_scores) > max_p:
             scores = np.linspace(minscore, maxscore, max_p)  # type: ignore
             cdf_p = np.interp(scores, base_scores, base_cdf_p)  # type: ignore
         else:
             scores, cdf_p = base_scores, base_cdf_p
-        return CdfData(
-            cdf_p=cdf_p,
-            scores=scores,  # type: ignore
+        return PlotData(
+            y=cdf_p,
+            x=scores,  # type: ignore
         )

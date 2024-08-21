@@ -11,7 +11,7 @@ import numpy as np
 
 from rbeval.eval_spec import EvalSpec
 from rbeval.plot.data import EvalGroup, Figure, ModelEval
-from rbeval.plot.utils import CdfData, renormed
+from rbeval.plot.utils import PlotData, renormed
 from typing import Any
 
 
@@ -135,23 +135,23 @@ def plot_diff_cdf(grouped: Dict[str, List[Scores]]) -> alt.HConcatChart:
         diff_cdf_data: List[pd.DataFrame] = []
         corr_cdf_data: List[pd.DataFrame] = []
         for score in score_list:
-            diff_cdf = CdfData.from_samples(score.cor_minus_inc_samples)
+            diff_cdf = PlotData.perf_curve_from_samples(score.cor_minus_inc_samples)
             diff_cdf_data.append(
                 pd.DataFrame(
                     {
-                        "p": diff_cdf.scores,
-                        "1-CDF(p)": diff_cdf.cdf_p,
+                        "p": diff_cdf.x,
+                        "1-CDF(p)": diff_cdf.y,
                         "fewshot": score.spec.fewshot,
                         "model": score.spec.model_name,
                     }
                 )
             )
-            corr_cdf = CdfData.from_samples(score.cor_samples)
+            corr_cdf = PlotData.perf_curve_from_samples(score.cor_samples)
             corr_cdf_data.append(
                 pd.DataFrame(
                     {
-                        "p": corr_cdf.scores,
-                        "1-CDF(p)": corr_cdf.cdf_p,
+                        "p": corr_cdf.x,
+                        "1-CDF(p)": corr_cdf.y,
                         "fewshot": score.spec.fewshot,
                         "model": score.spec.model_name,
                     }
