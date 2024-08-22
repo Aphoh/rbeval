@@ -16,7 +16,7 @@ def plot_cfgs():
         CorrectProbCdfPlot(),
         CorrIncorrDiffConfig(),
         ROCCurve(),
-        MaxIncorProbCdfPlot(),
+        #MaxIncorProbCdfPlot(),
         AccVsLoss(),
         AccVsAUC(),
     ]

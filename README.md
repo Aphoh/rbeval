@@ -62,6 +62,12 @@ Here, $\Delta$ is a measure of how much more confident the model is in the corre
 
 An ideal model would have $\Phi = 1$ (and therefore $\Delta=1$) always, while a model that performs random guessing would have $p_i = \Phi = 0.25$ (and therefore $\Delta=0$) always.
 
+### Strength as a classifier
+If we take each question given, we can record two results from it as a correct/incorrect classifier:
+* Record `y_true=1` with `y_pred=p_{\text{correct}}`
+* Record `y_true=0` with `y_pred=\max(\{p_i : i \in I\})`
+We can then measure BCE and ROC-AUC for this classifier, and compare these metrics across models.
+
 <!---
 ### Reading $\Phi$ plots
 Let's look at an example: MMLU on Llama-7b and Guanaco-7b, an early example of instruction tuning, in the 5-shot setting.
