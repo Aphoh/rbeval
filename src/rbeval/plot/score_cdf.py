@@ -19,6 +19,7 @@ def plot_cfgs():
         #MaxIncorProbCdfPlot(),
         AccVsLoss(),
         AccVsAUC(),
+        YjVsAcc(),
     ]
 
 
@@ -219,6 +220,24 @@ class ROCCurve(CdfPlotConfig):
 
         return PlotData(x_interp, y_interp)
 
+class YjVsAcc(CdfPlotConfig):
+    name = "Yj vs Accuracy"
+    xline = None
+    xlabel = "Accuracy"
+    ylabel = "Yj"
+    type = "scatter"
+
+    def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
+        cor, incor = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cor)
+        incor = np.concatenate(incor).max(axis=1)
+        delta = cor - incor
+        pos = delta[delta > 0].mean()
+        neg = -delta[delta <= 0].mean()
+        pct_corr = np.mean(cor > incor)
+
+        yj = pos - neg
+        return PlotData(np.array([yj]), np.array([pct_corr]))
 
 def roc_data(evals: List[Eval], prob_renorm):
     weight_arrs = []
