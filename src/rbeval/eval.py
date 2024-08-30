@@ -1,7 +1,6 @@
 import subprocess
 import argparse
 from typing import Optional
-import torch
 import warnings
 import os
 from pathlib import Path
@@ -67,7 +66,14 @@ def main():
 
     os.environ["LM_HARNESS_CACHE_PATH"] = args.req_cache_path
 
-    n_gpu = torch.cuda.device_count()
+    try:
+        import torch  # type: ignore
+
+        n_gpu: int = torch.cuda.device_count()
+    except ImportError:
+        print("torch not found, won't calculate the number of GPUs")
+        n_gpu = 1
+        pass
     os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(map(str, range(n_gpu)))
     model_args = f"pretrained={model},dtype=auto,gpu_memory_utilization=0.7,tensor_parallel_size=1,data_parallel_size={n_gpu},max_model_len={max_len}"
     fewshot = list(range(min_fewshot, max_fewshot + 1))

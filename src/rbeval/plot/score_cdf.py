@@ -17,7 +17,7 @@ def plot_cfgs():
         CorrectProbCdfPlot(),
         CorrIncorrDiffConfig(),
         ROCCurve(),
-        #MaxIncorProbCdfPlot(),
+        # MaxIncorProbCdfPlot(),
         AccVsLoss(),
         AccVsAUC(),
         YjVsAcc(),
@@ -73,7 +73,11 @@ def plot_with_data(
         chart = (
             chart.encode(
                 x=alt.X("x:Q", title=cfg.xlabel, scale=alt.Scale(zero=False)),
-                y=alt.Y("y:Q", title=cfg.ylabel, scale=alt.Scale(zero=False, type=cfg.yscale)),
+                y=alt.Y(
+                    "y:Q",
+                    title=cfg.ylabel,
+                    scale=alt.Scale(zero=False, type=cfg.yscale),
+                ),
                 color=alt.Color(
                     "label:N", legend=alt.Legend(symbolOpacity=1.0, labelLimit=1000)
                 ).scale(scheme="dark2"),
@@ -105,7 +109,7 @@ class CdfPlotConfig(ABC):
     name: str = ""
     xline: Optional[float] = None
     type: Literal["line", "scatter"] = "line"
-    yscale: Optional[str] = alt.Undefined
+    yscale: alt.typing.Optional[Literal["log", "linear", "symlog"]] = alt.Undefined
 
     @abstractmethod
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
@@ -225,6 +229,7 @@ class ROCCurve(CdfPlotConfig):
 
         return PlotData(x_interp, y_interp)
 
+
 class YjVsAcc(CdfPlotConfig):
     name = "Yj vs Accuracy"
     xline = None
@@ -233,9 +238,9 @@ class YjVsAcc(CdfPlotConfig):
     type = "scatter"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
-        cor, incor = zip(*[renormed(e) for e in evals])
-        cor = np.concatenate(cor)
-        incor = np.concatenate(incor).max(axis=1)
+        cors, incors = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cors)
+        incor = np.concatenate(incors).max(axis=1)
         delta = cor - incor
         pos = delta[delta > 0].mean()
         neg = -delta[delta <= 0].mean()
@@ -243,6 +248,7 @@ class YjVsAcc(CdfPlotConfig):
 
         yj = pos - neg
         return PlotData(np.array([yj]), np.array([pct_corr]))
+
 
 class DeltaStdVsAccuracy(CdfPlotConfig):
     name = "Delta Std vs Accuracy"
@@ -252,14 +258,15 @@ class DeltaStdVsAccuracy(CdfPlotConfig):
     type = "scatter"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
-        cor, incor = zip(*[renormed(e) for e in evals])
-        cor = np.concatenate(cor)
-        incor = np.concatenate(incor).max(axis=1)
+        cors, incors = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cors)
+        incor = np.concatenate(incors).max(axis=1)
         delta = cor - incor
         pct_corr = np.mean(cor > incor)
 
         delta_std = np.std(delta)
         return PlotData(np.array([delta_std]), np.array([pct_corr]))
+
 
 class DeltaPdf(CdfPlotConfig):
     name = "Delta Pdf"
@@ -270,14 +277,15 @@ class DeltaPdf(CdfPlotConfig):
     yscale = "log"
 
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
-        cor, incor = zip(*[renormed(e) for e in evals])
-        cor = np.concatenate(cor)
-        incor = np.concatenate(incor).max(axis=1)
+        cors, incors = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cors)
+        incor = np.concatenate(incors).max(axis=1)
         delta = cor - incor
-        #delta = delta[delta > 0]
+        # delta = delta[delta > 0]
         hist, edges = np.histogram(delta, bins=50, density=True)
         xs = (edges[1:] + edges[:-1]) / 2
         return PlotData(hist, xs)
+
 
 def roc_data(evals: List[Eval], prob_renorm):
     weight_arrs = []

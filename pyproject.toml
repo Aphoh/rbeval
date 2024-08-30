@@ -13,6 +13,8 @@ dependencies = [
     "altair>=5.4.1",
     "streamlit>=1.37.1",
     "scikit-learn>=1.5.1",
+    "openai>=1.42.0",
+    "datasets>=2.21.0",
 ]
 
 [project.optional-dependencies]
@@ -23,3 +25,11 @@ eval = [
 [tool.mypy]
 check_untyped_defs = true
 files = ["tests", "src/rbeval"]
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.11.2",
+    "types-pyyaml>=6.0.12.20240808",
+    "types-tqdm>=4.66.0.20240417",
+    "pandas-stubs>=2.2.2.240807",
+]
