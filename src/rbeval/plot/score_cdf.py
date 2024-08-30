@@ -7,6 +7,7 @@ import numpy as np
 import altair as alt
 import pandas as pd
 from sklearn.metrics import roc_curve, roc_auc_score  # type: ignore
+from altair import datum
 
 from rbeval.plot.utils import PlotData, renormed
 
@@ -20,6 +21,8 @@ def plot_cfgs():
         AccVsLoss(),
         AccVsAUC(),
         YjVsAcc(),
+        DeltaStdVsAccuracy(),
+        DeltaPdf(),
     ]
 
 
@@ -70,7 +73,7 @@ def plot_with_data(
         chart = (
             chart.encode(
                 x=alt.X("x:Q", title=cfg.xlabel, scale=alt.Scale(zero=False)),
-                y=alt.Y("y:Q", title=cfg.ylabel, scale=alt.Scale(zero=False)),
+                y=alt.Y("y:Q", title=cfg.ylabel, scale=alt.Scale(zero=False, type=cfg.yscale)),
                 color=alt.Color(
                     "label:N", legend=alt.Legend(symbolOpacity=1.0, labelLimit=1000)
                 ).scale(scheme="dark2"),
@@ -81,6 +84,7 @@ def plot_with_data(
                     alt.value(0.0),  # type: ignore
                 ),
             )
+            .transform_filter(datum.y > 0)
             .properties(title=cfg.title(group_name, renorm))  # type: ignore
             .add_params(fs_selection, label_selection)
             .interactive()
@@ -101,6 +105,7 @@ class CdfPlotConfig(ABC):
     name: str = ""
     xline: Optional[float] = None
     type: Literal["line", "scatter"] = "line"
+    yscale: Optional[str] = alt.Undefined
 
     @abstractmethod
     def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
@@ -238,6 +243,41 @@ class YjVsAcc(CdfPlotConfig):
 
         yj = pos - neg
         return PlotData(np.array([yj]), np.array([pct_corr]))
+
+class DeltaStdVsAccuracy(CdfPlotConfig):
+    name = "Delta Std vs Accuracy"
+    xline = None
+    xlabel = "Accuracy"
+    ylabel = "Delta Std"
+    type = "scatter"
+
+    def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
+        cor, incor = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cor)
+        incor = np.concatenate(incor).max(axis=1)
+        delta = cor - incor
+        pct_corr = np.mean(cor > incor)
+
+        delta_std = np.std(delta)
+        return PlotData(np.array([delta_std]), np.array([pct_corr]))
+
+class DeltaPdf(CdfPlotConfig):
+    name = "Delta Pdf"
+    xline = None
+    xlabel = "Delta"
+    ylabel = "hehe"
+    type = "line"
+    yscale = "log"
+
+    def get_cdf(self, evals: List[Eval], prob_renorm: bool) -> "PlotData":
+        cor, incor = zip(*[renormed(e) for e in evals])
+        cor = np.concatenate(cor)
+        incor = np.concatenate(incor).max(axis=1)
+        delta = cor - incor
+        #delta = delta[delta > 0]
+        hist, edges = np.histogram(delta, bins=50, density=True)
+        xs = (edges[1:] + edges[:-1]) / 2
+        return PlotData(hist, xs)
 
 def roc_data(evals: List[Eval], prob_renorm):
     weight_arrs = []
