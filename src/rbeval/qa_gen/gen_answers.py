@@ -10,8 +10,7 @@ import asyncio
 from tqdm.asyncio import tqdm_asyncio
 from openai import InternalServerError
 from openai.types.chat import ChatCompletion
-
-from rbeval.qa_gen.client import RateLimitedClient
+from aiolimiter import AsyncLimiter
 
 
 @dataclass
@@ -99,31 +98,38 @@ def get_config() -> Config:
 
 
 async def get_completions(
-    config: Config, api: AsyncOpenAI, entry: dict, prompt: str, max_retry: int = 5
-):
+    config: Config,
+    api: AsyncOpenAI,
+    limiter: AsyncLimiter,
+    entry: dict,
+    prompt: str,
+    max_retry: int = 5,
+) -> dict:
+    question = entry[config.hf_dataset_q_field]
     try:
-        res = await api.chat.completions.create(
-            model=config.model_name,  # type: ignore
-            stream=False,
-            messages=[
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": entry[config.hf_dataset_q_field]},
-            ],
-            n=config.n_sample,
-        )
-        assert isinstance(res, ChatCompletion)
-        entry["samples"] = res.to_dict()
-        return entry
+        async with limiter:
+            res = await api.chat.completions.create(
+                model=config.model_name,  # type: ignore
+                stream=False,
+                messages=[
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": entry[config.hf_dataset_q_field]},
+                ],
+                n=1
+            )
+            assert isinstance(res, ChatCompletion)
+            return {"question": question, "sample": res.to_dict(), "entry": entry}
     except InternalServerError as e:
         print(f"Got an internal server error {e}. Retrying...")
         if max_retry > 0 and "overloaded" in e.message:
-            await asyncio.sleep(10)
-            return await get_completions(config, api, entry, prompt, max_retry - 1)
+            async with limiter:
+                await asyncio.sleep(10)
+            return await get_completions(config, api, limiter, entry, prompt, max_retry - 1)
         else:
             print(
                 f"Failed to get completions for entry: {entry[config.hf_dataset_q_field]}"
             )
-            return None
+            return {"question": question, "sample": None, "entry": entry}
 
 
 async def main():
@@ -139,19 +145,24 @@ async def main():
     entries = dset.select(range(min(config.max_questions or 3000, len(dset)))).to_list()
 
     print(f"Loaded {len(entries)} entries from the dataset")
-    client = RateLimitedClient(interval=1, count=5)
     api = AsyncOpenAI(
-        api_key=config.secret_key, base_url=config.base_api_url, http_client=client
+        api_key=config.secret_key,
+        base_url=config.base_api_url,
     )
 
-    prompt = "You are a helpful assistant. Answer the question given to the best of your ability. If you are unsure, say so rather than answer. If you know the answer, please provide it. Keep your answers thoughtful, but concise."
-    runnables = [get_completions(config, api, entry, prompt) for entry in entries]
-    async with asyncio.Semaphore(config.max_concurrent):
-        with open(config.output, "a") as f:
-            for res_fut in tqdm_asyncio.as_completed(runnables):
-                res = await res_fut
-                if res is not None:
-                    f.write(json.dumps(res) + "\n")
+    prompt = """
+    You are a helpful assistant. 
+    Answer the question given to the best of your ability. 
+    If you are unsure, say so and don't answer. 
+    If you know the answer, provide it. 
+    Keep your answers accurate and concise.
+    """.replace("\n", "").replace("  ", " ")
+    limiter = AsyncLimiter(20, 10)
+    runnables = [get_completions(config, api, limiter, entry, prompt) for entry in entries for _ in range(config.n_sample or 1)]
+    with open(config.output, "a") as f:
+        for res_fut in tqdm_asyncio.as_completed(runnables):
+            res = await res_fut
+            f.write(json.dumps(res) + "\n")
 
     print(f"Dataset saved to {config.output}")
 

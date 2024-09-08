@@ -4,6 +4,7 @@ lmo*
 .vscode/launch.json
 scratch
 *.jsonl
+old/
 .env.yaml
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
