@@ -26,7 +26,8 @@ class Config:
     hf_dataset_q_field: str = "question"
     n_sample: Optional[int] = None
     max_questions: Optional[int] = None
-    max_concurrent: int = 150
+    query_limit_rate = 20
+    query_limit_period = 10
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -76,7 +77,8 @@ def parse_args():
     )
     parser.add_argument("--n_sample", type=int, help="Number of samples")
     parser.add_argument("--max_questions", type=int, help="Number of questions")
-    parser.add_argument("--max_concurrent", type=int, help="Max concurrent requests")
+    parser.add_argument("--query_limit_rate", type=int, help="Max concurrent requests")
+    parser.add_argument("--query_limit_period", type=int, help="Max concurrent requests")
 
     return parser.parse_args()
 
@@ -157,7 +159,7 @@ async def main():
     If you know the answer, provide it. 
     Keep your answers accurate and concise.
     """.replace("\n", "").replace("  ", " ")
-    limiter = AsyncLimiter(20, 10)
+    limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
     runnables = [get_completions(config, api, limiter, entry, prompt) for entry in entries for _ in range(config.n_sample or 1)]
     with open(config.output, "a") as f:
         for res_fut in tqdm_asyncio.as_completed(runnables):

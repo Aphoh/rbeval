@@ -21,8 +21,9 @@ class Config:
     hf_dataset_q_field: str = "question"
     secret_key: Optional[str] = None
     max_eval_samples: Optional[int] = None
-    max_concurrent: int = 150
     dry_run: bool = False
+    query_limit_rate = 20
+    query_limit_period = 10
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -72,11 +73,8 @@ def parse_args():
         type=int,
         help="Maximum number of samples",
     )
-    parser.add_argument(
-        "--max_concurrent",
-        type=int,
-        help="Maximum number of concurrent requests",
-    )
+    parser.add_argument("--query_limit_rate", type=int, help="Max concurrent requests")
+    parser.add_argument("--query_limit_period", type=int, help="Max concurrent requests")
     parser.add_argument(
         "--dry_run",
         action="store_true",
@@ -175,7 +173,7 @@ async def main():
     samples = samples[:config.max_eval_samples]
 
     print(f"Loaded {len(samples)} entries from input")
-    limiter = AsyncLimiter(50, 5)
+    limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
     api = AsyncOpenAI(
         api_key=config.secret_key,
         base_url=config.base_api_url,
