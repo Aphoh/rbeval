@@ -26,8 +26,8 @@ class Config:
     hf_dataset_q_field: str = "question"
     n_sample: Optional[int] = None
     max_questions: Optional[int] = None
-    query_limit_rate = 20
-    query_limit_period = 10
+    query_limit_rate = 200
+    query_limit_period = 1
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -105,7 +105,7 @@ async def get_completions(
     limiter: AsyncLimiter,
     entry: dict,
     prompt: str,
-    max_retry: int = 5,
+    max_retry: int = 0,
 ) -> dict:
     question = entry[config.hf_dataset_q_field]
     try:
@@ -159,8 +159,18 @@ async def main():
     If you know the answer, provide it. 
     Keep your answers accurate and concise.
     """.replace("\n", "").replace("  ", " ")
-    limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
-    runnables = [get_completions(config, api, limiter, entry, prompt) for entry in entries for _ in range(config.n_sample or 1)]
+    limiter = asyncio.Semaphore(199)
+    counts = {}
+    for entry in entries:
+        counts[entry[config.hf_dataset_q_field]] = config.n_sample or 1
+    if Path(config.output).exists():
+        with open(config.output, "r") as f:
+            while line := f.readline():
+                data = json.loads(line)
+                counts[data["question"]] -= 1
+
+    print("Remaining:", sum(counts.values()))
+    runnables = [get_completions(config, api, limiter, entry, prompt) for entry in entries for _ in range(counts[entry[config.hf_dataset_q_field]])]
     with open(config.output, "a") as f:
         for res_fut in tqdm_asyncio.as_completed(runnables):
             res = await res_fut

@@ -173,7 +173,8 @@ async def main():
     samples = samples[:config.max_eval_samples]
 
     print(f"Loaded {len(samples)} entries from input")
-    limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
+    #limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
+    limiter = asyncio.Semaphore(128)
     api = AsyncOpenAI(
         api_key=config.secret_key,
         base_url=config.base_api_url,
