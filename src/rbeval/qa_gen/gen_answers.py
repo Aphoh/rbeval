@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Optional
 import yaml
+from typing import AsyncContextManager
 from dataclasses import dataclass, fields
 from datasets import load_dataset  # type: ignore
 from openai import AsyncOpenAI
@@ -10,7 +11,6 @@ import asyncio
 from tqdm.asyncio import tqdm_asyncio
 from openai import InternalServerError
 from openai.types.chat import ChatCompletion
-from aiolimiter import AsyncLimiter
 
 
 @dataclass
@@ -102,7 +102,7 @@ def get_config() -> Config:
 async def get_completions(
     config: Config,
     api: AsyncOpenAI,
-    limiter: AsyncLimiter,
+    limiter: AsyncContextManager,
     entry: dict,
     prompt: str,
     max_retry: int = 0,
