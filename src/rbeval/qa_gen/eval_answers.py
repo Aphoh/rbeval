@@ -23,8 +23,7 @@ class Config:
     secret_key: Optional[str] = None
     max_eval_samples: Optional[int] = None
     dry_run: bool = False
-    query_limit_rate = 20
-    query_limit_period = 10
+    max_concurrent_requests: int = 256
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -74,9 +73,8 @@ def parse_args():
         type=int,
         help="Maximum number of samples",
     )
-    parser.add_argument("--query_limit_rate", type=int, help="Max concurrent requests")
     parser.add_argument(
-        "--query_limit_period", type=int, help="Max concurrent requests"
+        "--max_concurrent_requests", type=int, help="Max concurrent requests"
     )
     parser.add_argument(
         "--dry_run",
@@ -177,8 +175,7 @@ async def main():
     samples = samples[: config.max_eval_samples]
 
     print(f"Loaded {len(samples)} entries from input")
-    # limiter = AsyncLimiter(config.query_limit_rate, config.query_limit_period)
-    limiter = asyncio.Semaphore(128)
+    limiter = asyncio.Semaphore(config.max_concurrent_requests)
     api = AsyncOpenAI(
         api_key=config.secret_key,
         base_url=config.base_api_url,

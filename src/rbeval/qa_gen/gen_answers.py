@@ -26,8 +26,7 @@ class Config:
     hf_dataset_q_field: str = "question"
     n_sample: Optional[int] = None
     max_questions: Optional[int] = None
-    query_limit_rate = 200
-    query_limit_period = 1
+    max_concurrent_requests = 256
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -77,8 +76,9 @@ def parse_args():
     )
     parser.add_argument("--n_sample", type=int, help="Number of samples")
     parser.add_argument("--max_questions", type=int, help="Number of questions")
-    parser.add_argument("--query_limit_rate", type=int, help="Max concurrent requests")
-    parser.add_argument("--query_limit_period", type=int, help="Max concurrent requests")
+    parser.add_argument(
+        "--max_concurrent_requests", type=int, help="Max concurrent requests"
+    )
 
     return parser.parse_args()
 
@@ -117,7 +117,7 @@ async def get_completions(
                     {"role": "system", "content": prompt},
                     {"role": "user", "content": entry[config.hf_dataset_q_field]},
                 ],
-                n=1
+                n=1,
             )
             assert isinstance(res, ChatCompletion)
             return {"question": question, "sample": res.to_dict(), "entry": entry}
@@ -126,7 +126,9 @@ async def get_completions(
         if max_retry > 0 and "overloaded" in e.message:
             async with limiter:
                 await asyncio.sleep(10)
-            return await get_completions(config, api, limiter, entry, prompt, max_retry - 1)
+            return await get_completions(
+                config, api, limiter, entry, prompt, max_retry - 1
+            )
         else:
             print(
                 f"Failed to get completions for entry: {entry[config.hf_dataset_q_field]}"
@@ -153,13 +155,13 @@ async def main():
     )
 
     prompt = """
-    You are a helpful assistant. 
-    Answer the question given to the best of your ability. 
-    If you are unsure, say so and don't answer. 
-    If you know the answer, provide it. 
+    You are a helpful assistant.
+    Answer the question given to the best of your ability.
+    If you are unsure, say so and don't answer.
+    If you know the answer, provide it.
     Keep your answers accurate and concise.
     """.replace("\n", "").replace("  ", " ")
-    limiter = asyncio.Semaphore(199)
+    limiter = asyncio.Semaphore(config.max_concurrent_requests)
     counts = {}
     for entry in entries:
         counts[entry[config.hf_dataset_q_field]] = config.n_sample or 1
@@ -170,7 +172,11 @@ async def main():
                 counts[data["question"]] -= 1
 
     print("Remaining:", sum(counts.values()))
-    runnables = [get_completions(config, api, limiter, entry, prompt) for entry in entries for _ in range(counts[entry[config.hf_dataset_q_field]])]
+    runnables = [
+        get_completions(config, api, limiter, entry, prompt)
+        for entry in entries
+        for _ in range(counts[entry[config.hf_dataset_q_field]])
+    ]
     with open(config.output, "a") as f:
         for res_fut in tqdm_asyncio.as_completed(runnables):
             res = await res_fut
