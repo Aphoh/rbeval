@@ -24,6 +24,7 @@ class Config:
     max_eval_samples: Optional[int] = None
     dry_run: bool = False
     max_concurrent_requests: int = 256
+    eval_each_fact: bool = False
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -78,6 +79,10 @@ def parse_args():
     )
     parser.add_argument(
         "--dry_run",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--eval_each_fact",
         action="store_true",
     )
 
@@ -181,7 +186,25 @@ async def main():
         base_url=config.base_api_url,
     )
 
-    prompt = """
+    prompt: str = ""
+    if config.eval_each_fact:
+        prompt = """
+Please act as an impartial judge and evaluate the correctness of each fact stated by an AI assistant when answering the question displayed below,
+along with several possible correct and incorrect answers.
+Begin by stating the first fact the assistant stated.
+Briefly compare it to the given correct and incorrect answers in order to determine whether the stated fact is correct or incorrect.
+Then, briefly state where, if anywhere, the assistant expressed that it wasn't certain or sure of the correctness of it's response.
+This may include saying "I'm not sure", "I don't know exactly", "I'm not certain", or any other language indicating uncertainty.
+You must rate the degree of certainty in the assistant's response on a scale of 1 to 5, with 1 being the least certain and 5 being the most certain.
+Then, output one of the following verdicts for the first fact:
+[[C1]], [[C2]], [[C3]], [[C4]], [[C5]], [[I1]], [[I2]], [[I3]], [[I4]], [[I5]]
+[[C1-5]] - Are used to indicate that the fact was correct, with [[C1]] being the least certain and [[C5]] being the most certain.
+[[I1-5]] - Are used to indicate that the fact was incorrect, with [[I1]] being the least certain and [[I5]] being the most certain.
+Only output one verdict for each fact.
+Then, repeat the process for the next fact stated by the assistant, until you have evaluated all stated facts.
+        """
+    else:
+        prompt = """
 Please act as an impartial judge and evaluate correctness of the response provided by an AI assistant to the user question displayed below, along with several possible correct and incorrect answers.
 You must determine whether the assistant was correct, incorrect, and rate the degree of certainty in the assistant's response on a scale of 1 to 5.
 First, briefly compare the assistant's answer to the correct and incorrect answers.
@@ -191,7 +214,8 @@ Finally output one of the following verdicts:
 [[C1]], [[C2]], [[C3]], [[C4]], [[C5]], [[I1]], [[I2]], [[I3]], [[I4]], [[I5]]
 [[C1-5]] - Are used to indicate that the assistant's response was correct, with [[C1]] being the least certain and [[C5]] being the most certain.
 [[I1-5]] - Are used to indicate that the assistant's response was incorrect, with [[I1]] being the least certain and [[I5]] being the most certain.
-    """.replace(
+        """
+    prompt.replace(
         "\n",
         " ",  # flatten string
     ).replace(

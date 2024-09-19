@@ -5,6 +5,8 @@ import pandas as pd
 import streamlit as st
 import argparse
 from dacite import from_dict
+import polars as pl
+import altair as alt
 
 from rbeval.plot.dash_utils import markdown_insert_images
 from rbeval.plot.data import EvalGroup, get_samples
@@ -14,6 +16,7 @@ from rbeval.plot.score_cdf import (
     get_plot_data,
     plot_cfgs,
 )
+import rbeval.plot.judge_llm_plots as judge
 from rbeval.plot import model_comp
 from huggingface_hub import snapshot_download  # type: ignore
 
@@ -48,6 +51,11 @@ def cache_compare(
     return grouped_dict, base_name, comp_name
 
 
+@st.cache_data
+def load_judge_data() -> List[pl.DataFrame]:
+    return list(judge.load_data())
+
+
 def main():
     parser = argparse.ArgumentParser(description="rbeval dashboard")
     parser.add_argument("--evals", type=str, default="./lmo-fake", required=False)
@@ -62,16 +70,25 @@ def main():
             markdown = f.read().split("---", 2)[-1]
             st.markdown(markdown_insert_images(markdown), unsafe_allow_html=True)
 
+    with st.expander("Judge LLM Plots"):
+        judge_data = load_judge_data()
+        plots = [judge.plot_score_dist(*d) for d in judge_data]
+        st.altair_chart(
+            alt.hconcat(*plots).resolve_scale(y="shared"), use_container_width=True
+        )
+
     score_cdf_data, cfgs = cached_score_cdf(eval_dir, None)
     assert len(score_cdf_data) > 0, "No score cdfs found"
     group_names: List[str] = sorted(
         score_cdf_data[0]["group"].unique().tolist(), reverse=True
     )
 
-    st.markdown("""
+    st.markdown(
+        """
     Below is a toggle which renormalizes the multiple choice answer probabilities to sum to 1.
     For more performant models (anything after Llama 1) or in higher fewshot scenarios, this doesn't impact the results very much.
-    """)
+    """
+    )
 
     renormed = st.toggle("Renormalize Probabilities", True)
     # fs_names = [str(i) + "-shot" for i in range(0, 5 + 1)]
