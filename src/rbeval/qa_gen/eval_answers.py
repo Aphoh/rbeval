@@ -25,6 +25,7 @@ class Config:
     dry_run: bool = False
     max_concurrent_requests: int = 256
     eval_each_fact: bool = False
+    max_tokens: int = 4096
 
 
 def load_config_from_yaml(file_path: Path) -> dict:
@@ -85,6 +86,7 @@ def parse_args():
         "--eval_each_fact",
         action="store_true",
     )
+    parser.add_argument("--max_tokens", type=int, help="Max tokens for completion")
 
     return parser.parse_args()
 
@@ -153,6 +155,7 @@ async def get_completions(
                             {"role": "system", "content": prompt},
                             {"role": "user", "content": content},
                         ],
+                        max_tokens=config.max_tokens,
                     )
                     assert isinstance(res, ChatCompletion)
                     ret["eval"] = res.choices[0].message.content

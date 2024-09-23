@@ -21,7 +21,7 @@ dependencies = [
 
 [project.optional-dependencies]
 eval = [
-    "lm-eval[vllm]==0.4.3"
+    "lm-eval[vllm]==0.4.4"
 ]
 
 [tool.mypy]
