@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from typing import Optional
 from typing import AsyncContextManager
+import httpx
 import yaml
 from dataclasses import dataclass, fields
 from openai import AsyncOpenAI
@@ -156,6 +157,7 @@ async def get_completions(
                             {"role": "user", "content": content},
                         ],
                         max_tokens=config.max_tokens,
+                        timeout=httpx.Timeout(300, connect=5),
                     )
                     assert isinstance(res, ChatCompletion)
                     ret["eval"] = res.choices[0].message.content
